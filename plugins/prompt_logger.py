@@ -2,7 +2,7 @@
 from pathlib import Path
 import json
 from datetime import datetime
-from plugin_base import Plugin
+from plugin import Plugin
 
 class PromptLoggerPlugin(Plugin):
     """Plugin to log all prompts and their results"""

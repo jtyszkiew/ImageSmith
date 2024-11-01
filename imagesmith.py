@@ -17,9 +17,12 @@ import importlib.util
 import inspect
 import sys
 
+from workflow import WorkflowManager
+
 
 class Plugin:
     """Base class for bot plugins"""
+
     def __init__(self, bot):
         print(f"Plugin.__init__ called for {self.__class__.__name__}")
         self.bot = bot
@@ -54,161 +57,6 @@ class HookManager:
                 results.append(result)
             return results
         return []
-
-class WorkflowManager:
-    """Manages ComfyUI workflows and their configurations"""
-    def __init__(self, config_path: str):
-        self.config = self._load_config(config_path)
-        self.workflows = self.config['workflows']
-        self.default_workflow = self.config.get('default_workflow')
-
-    def _load_config(self, config_path: str) -> dict:
-        """Load configuration from YAML file"""
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
-
-    def get_workflow(self, name: str) -> dict:
-        """Get workflow configuration by name"""
-        return self.workflows.get(name, {})
-
-    def get_selectable_workflows(self) -> Dict[str, dict]:
-        """Get all workflows that are marked as selectable"""
-        return {k: v for k, v in self.workflows.items()
-                if v.get('selectable', True)}
-
-    def load_workflow_file(self, workflow_path: str) -> dict:
-        """Load workflow JSON file"""
-        with open(workflow_path, 'r') as f:
-            return json.load(f)
-
-    def update_prompt_node(self, workflow_json: dict, prompt: str, workflow_config: dict) -> dict:
-        """Update the prompt in the specified node"""
-        try:
-            # Get the text prompt node ID from workflow config
-            text_prompt_node_id = workflow_config.get('text_prompt_node_id')
-            if not text_prompt_node_id:
-                print(f"Warning: No text_prompt_node_id specified in workflow config")
-                return workflow_json
-
-            # Convert node ID to string as JSON keys are strings
-            node_id = str(text_prompt_node_id)
-
-            if node_id not in workflow_json:
-                print(f"Warning: Node ID {node_id} not found in workflow")
-                return workflow_json
-
-            node = workflow_json[node_id]
-
-            # Update the text input in the node
-            if 'inputs' in node:
-                # Check if the node has a 'text' input
-                if 'text' in node['inputs']:
-                    node['inputs']['text'] = prompt
-                    print(f"Updated prompt in node {node_id}: {prompt}")
-                else:
-                    print(f"Warning: Node {node_id} does not have a 'text' input")
-            else:
-                print(f"Warning: Node {node_id} does not have inputs")
-
-            return workflow_json
-        except Exception as e:
-            print(f"Error updating prompt node: {e}")
-            return workflow_json
-
-    def _apply_setting(self, workflow_json: dict, setting_name: str, setting_def: dict, params: list[str] = None):
-        """Apply a single setting to the workflow"""
-        try:
-            if 'code' in setting_def:
-                code = setting_def['code']
-                # Create function from code string
-                exec(code)
-                if params:
-                    locals()[setting_name](workflow_json, *params)
-                else:
-                    locals()[setting_name](workflow_json)
-                print(f"Applied setting: {setting_name}")
-        except Exception as e:
-            print(f"Error applying setting {setting_name}: {e}")
-
-    def _find_setting_def(self, workflow: dict, setting_name: str) -> Optional[dict]:
-        """Find setting definition in workflow settings"""
-        if 'settings' not in workflow:
-            return None
-
-        for setting_def in workflow['settings']:
-            if setting_def.get('name') == setting_name:
-                return setting_def
-        return None
-
-    def apply_settings(self, workflow_json: dict, settings_str: str = None) -> dict:
-        """Apply settings to a workflow including __before and __after"""
-        workflow = self.get_workflow(self.default_workflow)
-        if not workflow:
-            return workflow_json
-
-        try:
-            # Apply __before settings if they exist
-            before_setting = self._find_setting_def(workflow, '__before')
-            if before_setting:
-                print("Applying __before settings...")
-                self._apply_setting(workflow_json, '__before', before_setting)
-
-            # Apply custom settings if provided
-            if settings_str:
-                settings_list = settings_str.split(';')
-                for setting in settings_list:
-                    if not setting:
-                        continue
-
-                    # Parse setting name and parameters
-                    if '(' in setting and ')' in setting:
-                        func_name = setting.split('(')[0]
-                        params_str = setting[len(func_name) + 1:-1]
-                        params = [p.strip() for p in params_str.split(',') if p.strip()]
-                    else:
-                        func_name = setting
-                        params = []
-
-                    # Find and apply the setting
-                    setting_def = self._find_setting_def(workflow, func_name)
-                    if setting_def:
-                        self._apply_setting(workflow_json, func_name, setting_def, params)
-                    else:
-                        print(f"Warning: Setting '{func_name}' not found in workflow configuration")
-
-            # Apply __after settings if they exist
-            after_setting = self._find_setting_def(workflow, '__after')
-            if after_setting:
-                print("Applying __after settings...")
-                self._apply_setting(workflow_json, '__after', after_setting)
-
-            return workflow_json
-
-        except Exception as e:
-            print(f"Error applying settings: {e}")
-            return workflow_json
-
-    def prepare_workflow(self, workflow_name: str, prompt: str, settings: Optional[str] = None) -> dict:
-        """Prepare a workflow with prompt and settings"""
-        try:
-            # Get workflow configuration
-            workflow_config = self.get_workflow(workflow_name)
-            if not workflow_config:
-                raise ValueError(f"Workflow '{workflow_name}' not found")
-
-            # Load workflow file
-            workflow_json = self.load_workflow_file(workflow_config['workflow'])
-
-            # Update prompt
-            workflow_json = self.update_prompt_node(workflow_json, prompt, workflow_config)
-
-            # Apply settings
-            workflow_json = self.apply_settings(workflow_json, settings)
-
-            return workflow_json
-        except Exception as e:
-            print(f"Error preparing workflow: {e}")
-            raise
 
 
 class ComfyUIClient:
@@ -351,18 +199,26 @@ class ComfyUIClient:
                     value = msg_data.get('value', 0)
                     max_value = msg_data.get('max', 100)
 
-                    # Store progress for this node
-                    node_progress[node] = {
-                        'value': value,
-                        'max': max_value
-                    }
+                    # Calculate the progress percentage
+                    progress_percentage = (value / max_value) * 100
 
-                    # Create progress status message
-                    progress_bar = self._create_progress_bar(value, max_value)
-                    status = f"🔄 Processing node {node}...\n{progress_bar}"
+                    # Determine the closest milestone
+                    milestones = [25, 50, 75, 100]
+                    for milestone in milestones:
+                        if progress_percentage >= milestone and node_progress.get(node, {}).get('last_milestone', 0) < milestone:
+                            # Update progress only at milestone percentages
+                            node_progress[node] = {
+                                'value': value,
+                                'max': max_value,
+                                'last_milestone': milestone
+                            }
 
-                    # Update status without changing the image
-                    await message_callback(status, None)
+                            # Create progress status message
+                            progress_bar = self._create_progress_bar(value, max_value)
+                            status = f"🔄 Processing node {node}...\n{progress_bar} ({milestone}%)"
+
+                            # Update status without changing the image
+                            await message_callback(status, None)
 
                 elif msg_type == 'executing':
                     node_id = msg_data.get('node')
@@ -492,8 +348,10 @@ class ImageView(discord.ui.View):
         self.add_item(ImageButton("Regenerate", f"regenerate_{prompt_id}", "🔄"))
         self.add_item(ImageButton("Use as Input", f"img2img_{prompt_id}", "🖼"))
 
+
 class GenerationQueue:
     """Manages queued generation requests"""
+
     def __init__(self):
         self.queue = asyncio.Queue()
         self.processing = False
@@ -538,6 +396,7 @@ class GenerationQueue:
         """Get current queue size"""
         return self.queue.qsize()
 
+
 class ComfyUIBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -555,12 +414,11 @@ class ComfyUIBot(commands.Bot):
         self.generation_queue = GenerationQueue()  # Add queue system
 
     async def setup_hook(self) -> None:
-        """Setup hook that runs when the bot starts."""
+        """Setup hook that runs when the bot starts"""
         print("Setting up bot...")
         await self.load_plugins()
 
         try:
-            # Initialize ComfyUI client and connect
             self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['url'])
             await self.comfy_client.connect()
             print("Connected to ComfyUI")
@@ -573,6 +431,8 @@ class ComfyUIBot(commands.Bot):
         try:
             # Add commands to the command tree
             self.tree.add_command(self.forge_command())
+            self.tree.add_command(self.reforge_command())
+            self.tree.add_command(self.upscale_command())
             self.tree.add_command(self.workflows_command())
 
             # Sync commands
@@ -610,9 +470,9 @@ class ComfyUIBot(commands.Bot):
         plugin_files = [f for f in plugins_dir.glob("*.py") if f.name != "__init__.py"]
 
         for plugin_file in plugin_files:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"Loading plugin file: {plugin_file}")
-            print(f"{'='*50}")
+            print(f"{'=' * 50}")
 
             try:
                 # Import the module
@@ -647,7 +507,7 @@ class ComfyUIBot(commands.Bot):
                             print(f"  - Is class: Yes")
                             # Check if it's a Plugin subclass
                             try:
-                                from plugin_base import Plugin
+                                from plugin import Plugin
                                 if issubclass(obj, Plugin):
                                     print(f"  - Is Plugin subclass: Yes")
                                     if obj != Plugin:  # Don't load the base Plugin class
@@ -744,10 +604,11 @@ class ComfyUIBot(commands.Bot):
             raise
 
     def forge_command(self):
-        """Create the forge command"""
+        """Create the forge command for txt2img generation"""
+
         @app_commands.command(
             name="forge",
-            description="Forge an image using ComfyUI"
+            description="Forge an image using text-to-image"
         )
         @app_commands.describe(
             prompt="Description of the image you want to create",
@@ -760,7 +621,68 @@ class ComfyUIBot(commands.Bot):
                 workflow: Optional[str] = None,
                 settings: Optional[str] = None
         ):
-            workflow_name = workflow or self.workflow_manager.default_workflow
+            await self.handle_generation(interaction, 'txt2img', prompt, workflow, settings)
+
+        return forge
+
+    def reforge_command(self):
+        """Create the reforge command for img2img generation"""
+
+        @app_commands.command(
+            name="reforge",
+            description="Reforge an existing image using image-to-image"
+        )
+        @app_commands.describe(
+            image="The image to reforge",
+            prompt="Description of the changes you want to make",
+            workflow="The workflow to use (optional)",
+            settings="Additional settings (optional)"
+        )
+        async def reforge(
+                interaction: discord.Interaction,
+                image: discord.Attachment,
+                prompt: str,
+                workflow: Optional[str] = None,
+                settings: Optional[str] = None
+        ):
+            await self.handle_generation(interaction, 'img2img', prompt, workflow, settings, image)
+
+        return reforge
+
+    def upscale_command(self):
+        """Create the upscale command"""
+
+        @app_commands.command(
+            name="upscale",
+            description="Upscale an existing image"
+        )
+        @app_commands.describe(
+            image="The image to upscale",
+            prompt="Description of the changes you want to make",
+            workflow="The workflow to use (optional)",
+            settings="Additional settings (optional)"
+        )
+        async def upscale(
+                interaction: discord.Interaction,
+                image: discord.Attachment,
+                prompt: str,
+                workflow: Optional[str] = None,
+                settings: Optional[str] = None
+        ):
+            await self.handle_generation(interaction, 'upscale', prompt, workflow, settings, image)
+
+        return upscale
+
+    async def handle_generation(self,
+                                interaction: discord.Interaction,
+                                workflow_type: str,
+                                prompt: str,
+                                workflow: Optional[str] = None,
+                                settings: Optional[str] = None,
+                                input_image: Optional[discord.Attachment] = None):
+        """Handle image generation for all command types"""
+        try:
+            workflow_name = workflow or self.workflow_manager.get_default_workflow(workflow_type)
             workflow_config = self.workflow_manager.get_workflow(workflow_name)
 
             if not workflow_config:
@@ -773,39 +695,68 @@ class ComfyUIBot(commands.Bot):
                 )
                 return
 
+            if workflow_config.get('type', 'txt2img') != workflow_type:
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="❌ Error",
+                        description=f"Workflow '{workflow_name}' is not a {workflow_type} workflow!",
+                        color=0xFF0000
+                    )
+                )
+                return
+
+            # Validate input image if required
+            if workflow_type in ['img2img', 'upscale']:
+                if not input_image:
+                    await interaction.response.send_message(
+                        embed=discord.Embed(
+                            title="❌ Error",
+                            description="Image input is required for this workflow type!",
+                            color=0xFF0000
+                        )
+                    )
+                    return
+
+                # Validate image format
+                if not input_image.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    await interaction.response.send_message(
+                        embed=discord.Embed(
+                            title="❌ Error",
+                            description="Invalid image format. Supported formats: PNG, JPG, JPEG, WEBP",
+                            color=0xFF0000
+                        )
+                    )
+                    return
+
             # Create initial embed
             embed = discord.Embed(title="🔨 ImageSmith Forge", color=0x2F3136)
-
-            # Check queue position
             queue_position = self.generation_queue.get_queue_position()
-            if queue_position > 0:
-                status = f"⏳ Queued (Position: {queue_position + 1})"
-            else:
-                status = "Starting generation..."
+            status = f"⏳ Queued (Position: {queue_position + 1})" if queue_position > 0 else "Starting generation..."
 
             embed.add_field(name="Status", value=status, inline=False)
             embed.add_field(name="Creator", value=interaction.user.mention, inline=True)
             embed.add_field(name="Workflow", value=workflow_name, inline=True)
-            embed.add_field(name="Prompt", value=prompt, inline=False)
+            if prompt:
+                embed.add_field(name="Prompt", value=prompt, inline=False)
             if settings:
                 embed.add_field(name="Settings", value=f"```{settings}```", inline=False)
 
-            # Send initial response
             await interaction.response.send_message(embed=embed)
             message = await interaction.original_response()
 
-            # Define the generation function that will be queued
+            # Get image data if provided
+            image_data = None
+            if input_image:
+                image_data = await input_image.read()
+
             async def run_generation():
                 try:
-                    # Prepare workflow
                     workflow_json = self.workflow_manager.prepare_workflow(
                         workflow_name,
                         prompt,
-                        settings
+                        settings,
+                        image_data
                     )
-
-                    # Execute hooks
-                    await self.hook_manager.execute_hook('pre_generate', workflow_json, prompt)
 
                     # Generate image
                     result = await self.comfy_client.generate(workflow_json)
@@ -816,7 +767,6 @@ class ComfyUIBot(commands.Bot):
                     if not prompt_id:
                         raise Exception("No prompt ID received from ComfyUI")
 
-                    # Define update callback
                     async def update_message(status: str, image_file: Optional[discord.File] = None):
                         new_embed = message.embeds[0].copy()
 
@@ -827,31 +777,10 @@ class ComfyUIBot(commands.Bot):
                                 break
 
                         if image_file:
-                            if status == "✅ Generation complete!":
-                                view = discord.ui.View()
-                                if workflow_config.get('upscaler'):
-                                    view.add_item(discord.ui.Button(
-                                        style=discord.ButtonStyle.primary,
-                                        label="✨ Upscale",
-                                        custom_id=f"upscale_{prompt_id}"
-                                    ))
-                                view.add_item(discord.ui.Button(
-                                    style=discord.ButtonStyle.secondary,
-                                    label="🔄 Regenerate",
-                                    custom_id=f"regenerate_{prompt_id}"
-                                ))
-                                view.add_item(discord.ui.Button(
-                                    style=discord.ButtonStyle.secondary,
-                                    label="🖼 Use as Input",
-                                    custom_id=f"img2img_{prompt_id}"
-                                ))
-                                await message.edit(embed=new_embed, attachments=[image_file], view=view)
-                            else:
-                                await message.edit(embed=new_embed, attachments=[image_file])
+                            await message.edit(embed=new_embed, attachments=[image_file])
                         else:
                             await message.edit(embed=new_embed)
 
-                    # Listen for updates
                     await self.comfy_client.listen_for_updates(prompt_id, update_message)
 
                 except Exception as e:
@@ -861,10 +790,18 @@ class ComfyUIBot(commands.Bot):
                     error_embed.add_field(name="Workflow", value=workflow_name, inline=True)
                     await message.edit(embed=error_embed)
 
-            # Add generation to queue
             await self.generation_queue.add_to_queue(run_generation)
 
-        return forge
+        except Exception as e:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="❌ Error",
+                        description=str(e),
+                        color=0xFF0000
+                    )
+                )
+            raise
 
     def workflows_command(self):
         """Create the workflows command"""
@@ -873,16 +810,29 @@ class ComfyUIBot(commands.Bot):
             name="workflows",
             description="List available workflows"
         )
-        async def workflows(interaction: discord.Interaction):
-            workflows = self.workflow_manager.get_selectable_workflows()
+        @app_commands.describe(
+            type="Type of workflows to list (txt2img, img2img, upscale)"
+        )
+        async def workflows(
+                interaction: discord.Interaction,
+                type: Optional[str] = None
+        ):
+            workflows = self.workflow_manager.get_selectable_workflows(type)
 
-            embed = discord.Embed(title="🔨 Available Forge Workflows", color=0x2F3136)
-            embed.set_footer(text=f"Requested by {interaction.user.name}")
+            embed = discord.Embed(
+                title="🔨 Available Forge Workflows",
+                color=0x2F3136
+            )
+
+            if type:
+                embed.description = f"Showing {type} workflows"
 
             for name, workflow in workflows.items():
+                workflow_type = workflow.get('type', 'txt2img')
+                description = workflow.get('description', 'No description')
                 embed.add_field(
-                    name=name,
-                    value=workflow.get('description', 'No description'),
+                    name=f"{name} ({workflow_type})",
+                    value=description,
                     inline=False
                 )
 

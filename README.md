@@ -25,8 +25,8 @@ A Discord bot that integrates with ComfyUI to generate images through a user-fri
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/imagesmith.git
-cd imagesmith
+git clone https://github.com/jtyszkiew/ImageSmith.git
+cd ImageSmith
 ```
 
 2. Create and activate a virtual environment:
@@ -46,36 +46,29 @@ cp configuration.example.yml configuration.yml
 ```
 
 5. Edit `configuration.yml` with your settings:
+
+Especially:
+- `discord.token`: Your Discord Bot Token
+- `comfyui.url`: Your ComfyUI instance URL
+- `comfyui.input_dir`: ComfyUI input directory (here comfyui saves images for img2img operations)
+
+When using example configuration don't forget to change model name in `workflowjson["4"]["inputs"]["ckpt_name"]`
+
 ```yaml
-discord:
-  token: YOUR_DISCORD_TOKEN
-comfyui:
-  url: "http://localhost:8188"  # Your ComfyUI instance URL
-default_workflow: avatar_generator
-workflows:
-  avatar_generator:
-    description: "Generate Avatar"
-    workflow: "./workflows/avatar_generator.json"
-    text_prompt_node_id: 27
-    selectable: true
-    upscaler: avatar_upscaler
-    settings:
-      - name: __before
-        description: "Default settings"
-        code: |
-          def __before(workflowjson):
-              workflowjson["27"]["inputs"]["steps"] = 20
-      - name: change_steps
-        description: "Change steps"
-        code: |
-          def change_steps(workflowjson, value):
-              workflowjson["27"]["inputs"]["steps"] = int(value)
+- name: __before
+  description: Will change steps for this workflow to the number provided in parenthesis
+  code: |
+    def __before(workflowjson):
+        import random
+
+        workflowjson["4"]["inputs"]["ckpt_name"] = "Juggernaut_X_RunDiffusion.safetensors"
+        workflowjson["3"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
 ```
 
 ### Running the Bot
 
 ```bash
-python bot.py
+python imagesmith.py
 ```
 
 ## 💬 Usage
@@ -108,16 +101,6 @@ With settings:
 
 ## ⚙️ Configuration
 
-### Workflows
-
-Each workflow in `configuration.yml` can have:
-- `description`: Workflow description
-- `workflow`: Path to ComfyUI workflow JSON
-- `text_prompt_node_id`: Node ID containing the prompt
-- `selectable`: Whether visible in UI
-- `upscaler`: Optional upscaler workflow
-- `settings`: Custom settings functions
-
 ### Settings
 
 Two special settings are available:
@@ -126,13 +109,16 @@ Two special settings are available:
 
 Example setting:
 ```yaml
-settings:
-  - name: change_steps
-    description: "Change generation steps"
-    code: |
-      def change_steps(workflowjson, value):
-          workflowjson["27"]["inputs"]["steps"] = int(value)
+- name: __before
+  description: Will change steps for this workflow to the number provided in parenthesis
+  code: |
+    def __before(workflowjson):
+        import random
+
+        workflowjson["4"]["inputs"]["ckpt_name"] = "Juggernaut_X_RunDiffusion.safetensors"
+        workflowjson["3"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
 ```
+Here we change the `seed` & `ckpt_name` before all generations.
 
 ## 🔌 Plugin System
 
@@ -140,7 +126,7 @@ settings:
 
 ```python
 # plugins/my_plugin.py
-from plugin_base import Plugin
+from plugin import Plugin
 
 class MyPlugin(Plugin):
     async def on_load(self):
@@ -163,24 +149,6 @@ Run tests:
 ```bash
 pip install pytest pytest-asyncio pytest-mock pytest-cov
 pytest tests/ -v --cov=./
-```
-
-## 📦 Project Structure
-
-```
-imagesmith/
-├── bot.py              # Main bot implementation
-├── plugin_base.py      # Plugin base class
-├── configuration.yml   # Bot configuration
-├── plugins/           
-│   ├── __init__.py
-│   └── prompt_logger.py
-├── workflows/          # ComfyUI workflow files
-│   └── avatar_generator.json
-└── tests/              # Test suite
-    ├── __init__.py
-    ├── conftest.py
-    └── test_*.py
 ```
 
 ## 🤝 Contributing
