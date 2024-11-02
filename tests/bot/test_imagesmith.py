@@ -182,10 +182,9 @@ class TestPlugin(Plugin):
         plugin_file.write_text(plugin_content)
 
         # Mock plugin path
-        with patch('pathlib.Path', return_value=plugins_dir):
-            await bot.load_plugins()
-            # Verify plugin was loaded
-            assert len(bot.plugins) > 0
+        await bot.load_plugins()
+        # Verify plugin was loaded
+        assert len(bot.plugins) > 0
 
     @pytest.mark.asyncio
     async def test_handle_generation(self, bot):
