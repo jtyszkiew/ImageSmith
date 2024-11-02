@@ -1,8 +1,9 @@
-# plugins/prompt_logger.py
 from pathlib import Path
 import json
 from datetime import datetime
-from plugin import Plugin
+
+from src.core.plugin import Plugin
+
 
 class PromptLoggerPlugin(Plugin):
     """Plugin to log all prompts and their results"""

@@ -1,6 +1,6 @@
-# plugin_base.py
 class Plugin:
     """Base class for bot plugins"""
+
     def __init__(self, bot):
         print(f"[{self.__class__.__name__}] Initializing...")
         self.bot = bot
