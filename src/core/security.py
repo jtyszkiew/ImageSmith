@@ -17,6 +17,7 @@ class SecurityManager:
 
         allowed_roles = security_config.get('allowed_roles', [])
         member_roles = [role.name for role in member.roles]
+
         if any(role in allowed_roles for role in member_roles):
             return True
 

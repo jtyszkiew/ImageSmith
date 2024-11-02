@@ -22,7 +22,9 @@ class SecurityResult:
 
 
 class ComfyUIBot(commands.Bot):
-    def __init__(self):
+    def __init__(self,
+                 configuration_path: str = 'configuration.yml',
+                 plugins_path: str = 'plugins'):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
@@ -30,12 +32,13 @@ class ComfyUIBot(commands.Bot):
 
         super().__init__(command_prefix='/', intents=intents)
 
-        self.workflow_manager = WorkflowManager('configuration.yml')
+        self.workflow_manager = WorkflowManager(configuration_path)
         self.hook_manager = HookManager()
         self.comfy_client = None
         self.plugins = []
         self.active_generations = {}
         self.generation_queue = GenerationQueue()
+        self.plugins_path = plugins_path
 
     async def setup_hook(self) -> None:
         """Setup hook that runs when the bot starts"""
@@ -43,7 +46,7 @@ class ComfyUIBot(commands.Bot):
         await self.load_plugins()
 
         try:
-            self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['url'])
+            self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['instances'])
             await self.comfy_client.connect()
             print("Connected to ComfyUI")
         except Exception as e:
@@ -53,7 +56,6 @@ class ComfyUIBot(commands.Bot):
 
         print("Registering commands...")
         try:
-
             self.tree.add_command(forge_command(self))
             self.tree.add_command(reforge_command(self))
             self.tree.add_command(upscale_command(self))
@@ -80,7 +82,7 @@ class ComfyUIBot(commands.Bot):
 
     async def load_plugins(self):
         """Load plugins from the plugins directory"""
-        plugins_dir = Path("plugins")
+        plugins_dir = Path(self.plugins_path)
         if not plugins_dir.exists():
             print("No plugins directory found")
             return
