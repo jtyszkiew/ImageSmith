@@ -1,4 +1,6 @@
 # ImageSmith 🔨
+[![Discord](https://img.shields.io/discord/1301892549568368651.svg?label=Discord)](https://discord.gg/9Ne74HPEue)
+![Codecov](https://img.shields.io/codecov/c/github/jtyszkiew/ImageSmith)
 
 A Discord bot that integrates with ComfyUI to generate images through a user-friendly Discord interface. Forge your imagination into reality!
 
@@ -75,10 +77,25 @@ python imagesmith.py
 
 ### Commands
 
-- `/forge [prompt] [workflow] [settings]` - Generate an image
+- `/forge [prompt] [workflow] [settings]` - txt2img
     - `prompt`: Description of the image you want to create
     - `workflow`: (Optional) Workflow to use
     - `settings`: (Optional) Additional settings
+
+
+- `/reforge [image] [prompt] [workflow] [settings]` - img2img
+  - `image`: Image to use as a reference
+  - `prompt`: Description of the image you want to create
+  - `workflow`: (Optional) Workflow to use
+  - `settings`: (Optional) Additional settings
+
+
+- `/upscale [image] [prompt] [workflow] [settings]` - similar to img2img but with upscaling
+  - `image`: Image to use as a reference
+  - `prompt`: Description of the image you want to create
+  - `workflow`: (Optional) Workflow to use
+  - `settings`: (Optional) Additional settings
+
 
 - `/workflows` - List available workflows
 
