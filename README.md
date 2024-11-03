@@ -4,6 +4,12 @@
 
 A Discord bot that integrates with ComfyUI to generate images through a user-friendly Discord interface. Forge your imagination into reality!
 
+### Discord
+You can join my Discord channel on which I'm testing updates on the bot. You won't be able to use the bot there (since it's my private instance) but you can see the possible options
+
+### What's ImageSmith not?
+Magical bot that will create workflows for you. You need to create them yourself, bot only allows you to use them through Discord UI. There are some example workflows in the repository but these are the most basic ones.
+
 ## 🌟 Features
 
 - Direct integration with ComfyUI
@@ -11,7 +17,6 @@ A Discord bot that integrates with ComfyUI to generate images through a user-fri
 - Customizable workflows
 - Plugin system for extensibility
 - Real-time generation progress updates
-- Support for upscaling and img2img operations
 - Configurable settings and parameters
 - Hook system for workflow customization
 
@@ -51,10 +56,13 @@ cp configuration.example.yml configuration.yml
 
 Especially:
 - `discord.token`: Your Discord Bot Token
-- `comfyui.url`: Your ComfyUI instance URL
+- `comfyui.instances[0].url`: Your ComfyUI instance URL
 - `comfyui.input_dir`: ComfyUI input directory (here comfyui saves images for img2img operations)
 
-When using example configuration don't forget to change model name in `workflowjson["4"]["inputs"]["ckpt_name"]`
+When using example configuration don't forget to change model name in 
+```
+workflowjson["4"]["inputs"]["ckpt_name"]
+```
 
 ```yaml
 - name: __before
@@ -137,13 +145,52 @@ Example setting:
 ```
 Here we change the `seed` & `ckpt_name` before all generations.
 
+## Defining custom setting
+Custom settings are designed to help you modify the workflows before executing it in ComfyUI. Why? For my it's often a case when I want to change some smaller setting on
+the fly for one generation - for example number of steps, seed or the image orientation.
+
+Example setting:
+```yaml
+- name: hd
+  description: Will change resolution for this workflow to hd
+  code: |
+    def hd(workflowjson):
+        workflowjson["5"]["inputs"]["width"] = 1280
+        workflowjson["5"]["inputs"]["height"] = 720
+```
+This setting will change the resolution of the image to 1280x720.
+
+Usage: `/forge A fantasy character --settings "hd()"`
+
+```yaml
+- name: portrait
+  description: Will change resolution for this workflow to portrait
+  code: |
+    def portrait(workflowjson):
+        width = workflowjson["5"]["inputs"]["width"]
+        height = workflowjson["5"]["inputs"]["height"]
+
+        print(width, height)
+
+        workflowjson["5"]["inputs"]["width"] = width if width < height else height
+        workflowjson["5"]["inputs"]["height"] = width if width > height else height
+```
+
+This setting will change the resolution of the image to portrait.
+
+Usage: `/forge A fantasy character --settings "portrait()"`
+
+## Combining multiple settings
+You can combine multiple settings in one command. Just separate them with a semicolon.
+
+Usage: `/forge A fantasy character --settings "hd();portrait()"`
+
 ## 🔌 Plugin System
 
 ### Creating a Plugin
 
 ```python
-# plugins/my_plugin.py
-from plugin import Plugin
+from src.core.plugin import Plugin
 
 class MyPlugin(Plugin):
     async def on_load(self):
@@ -157,8 +204,41 @@ class MyPlugin(Plugin):
 
 ### Available Hooks
 
+- `pre_security_check`: Called before security checks
+- `security_check`: Called during security checks
 - `pre_generate`: Called before generation starts
 - `generation_complete`: Called when generation finishes
+
+Hooks & Plugins are work in progress and will be expanded in the future.
+
+## Security
+
+Currently, the bot is using a simple security system. You can define a list of users and roles that are allowed to use workflows and settings:
+
+### Security for Setting
+```yaml
+- name: hd
+  description: Will change resolution for this workflow to hd
+  security:
+    enabled: true
+    allowed_roles:
+      - "Smith"
+    allowed_users:
+      - "Smith123"
+  code: "..."
+```
+
+### Security for Workflow
+```yaml
+workflows:
+  forge:
+    security:
+      enabled: true
+      allowed_roles:
+        - "Smith"
+      allowed_users:
+        - "Smith123"
+```
 
 ## 🧪 Testing
 
