@@ -322,15 +322,18 @@ class ComfyUIClient:
                         progress_percentage = (value / max_value) * 100
                         milestones = [25, 50, 75, 100]
 
+                        if node_progress.get(node, {}).get('last_milestone') == 100 and progress_percentage < 100:
+                            node_progress[node] = {'last_milestone': 0}
+
                         for milestone in milestones:
-                            if progress_percentage >= milestone and node_progress.get(node, {}).get('last_milestone', 0) < milestone:
+                            if progress_percentage >= milestone > node_progress.get(node, {}).get('last_milestone', 0):
                                 node_progress[node] = {
                                     'value': value,
                                     'max': max_value,
                                     'last_milestone': milestone
                                 }
                                 progress_bar = self._create_progress_bar(value, max_value)
-                                status = f"🔄 Processing node {node}...\n{progress_bar} ({milestone}%)"
+                                status = f"🔄 Processing node {node}...\n{progress_bar}"
                                 await message_callback(status, None)
 
                     elif msg_type == 'executing':
