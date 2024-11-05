@@ -66,3 +66,23 @@ workflows:
     workflow: "./workflows/upscale.json"
     text_prompt_node_id: "6"
     image_input_node_id: "17"
+
+  txt2vid:
+    #########
+    ## This workflow uses the Mochi model
+    ## Follow these instructions to install it: https://blog.comfy.org/mochi-1/
+    #########
+    type: txt2img
+    description: "Generate short video"
+    workflow: "./workflows/txt2vid.json"
+    text_prompt_node_id: "6"
+    settings:
+      - name: __before
+        code: |
+          def __before(workflowjson):
+              import random
+          
+              workflowjson["3"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
+              workflowjson["21"]["inputs"]["width"] = 256
+              workflowjson["21"]["inputs"]["height"] = 512
+              workflowjson["21"]["inputs"]["length"] = 37

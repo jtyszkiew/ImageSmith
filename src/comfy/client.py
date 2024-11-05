@@ -298,6 +298,7 @@ class ComfyUIClient:
             raise Exception(f"No connected instance found for prompt {prompt_id}")
 
         current_image_data = None
+        current_image_filename = None
         generation_complete = False
         node_progress = {}
 
@@ -353,7 +354,7 @@ class ComfyUIClient:
                             if current_image_data:
                                 image_file = discord.File(
                                     io.BytesIO(current_image_data),
-                                    filename=f"forge_{prompt_id}.png"
+                                    filename=current_image_filename,
                                 )
                             await message_callback("✅ Generation complete!", image_file)
 
@@ -367,9 +368,11 @@ class ComfyUIClient:
                                         async with instance.session.get(image_url) as response:
                                             if response.status == 200:
                                                 current_image_data = await response.read()
+                                                current_image_filename = image_data.get('filename')
+
                                                 image_file = discord.File(
                                                     io.BytesIO(current_image_data),
-                                                    filename=f"forge_{prompt_id}.png"
+                                                    filename=current_image_filename,
                                                 )
                                                 await message_callback("🖼 New image generated!", image_file)
 
