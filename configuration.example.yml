@@ -4,14 +4,9 @@ discord:
 comfyui:
   instances:
     - url: 'http://127.0.0.1:8188'
-      weight: 2  # Higher weight means more traffic
       auth:
-        # Basic authentication
-        username: "user1"
-        password: "pass1"
-        # SSL/TLS settings
-        ssl_verify: true
-        ssl_cert: "/path/to/cert.pem"  # Optional
+        ssl_verify: false
+      weight: 1
   input_dir: COMFYUI_INPUT_DIR
 
 workflows:

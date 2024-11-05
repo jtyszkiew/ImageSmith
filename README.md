@@ -78,7 +78,7 @@ workflowjson["4"]["inputs"]["ckpt_name"]
 ### Running the Bot
 
 ```bash
-python imagesmith.py
+python main.py
 ```
 
 ## 💬 Usage
