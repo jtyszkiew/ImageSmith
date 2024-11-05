@@ -1,12 +1,14 @@
 import importlib
 import inspect
 import sys
+
 from pathlib import Path
 from typing import Optional
 
 import discord
 from discord.ext import commands
 
+from logger import logger
 from .commands import forge_command, reforge_command, upscale_command, workflows_command
 from ..comfy.workflow_manager import WorkflowManager
 from ..core.hook_manager import HookManager
@@ -42,19 +44,19 @@ class ComfyUIBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         """Setup hook that runs when the bot starts"""
-        print("Setting up bot...")
+        logger.info("Setting up bot...")
         await self.load_plugins()
 
         try:
             self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['instances'])
             await self.comfy_client.connect()
-            print("Connected to ComfyUI")
+            logger.info("Connected to ComfyUI")
         except Exception as e:
-            print(f"Failed to connect to ComfyUI: {e}")
+            logger.error(f"Failed to connect to ComfyUI: {e}")
             await self.cleanup()
             sys.exit(1)
 
-        print("Registering commands...")
+        logger.info("Registering commands...")
         try:
             self.tree.add_command(forge_command(self))
             self.tree.add_command(reforge_command(self))
@@ -62,29 +64,54 @@ class ComfyUIBot(commands.Bot):
             self.tree.add_command(workflows_command(self))
 
             commands = await self.tree.sync()
-            print(f"Registered {len(commands)} commands:")
+            logger.info(f"Registered {len(commands)} Discord commands:")
             for cmd in commands:
-                print(f"- /{cmd.name}")
+                logger.info(f"- /{cmd.name}")
         except Exception as e:
-            print(f"Failed to sync commands: {e}")
+            logger.error(f"Failed to sync commands: {e}")
             await self.cleanup()
             sys.exit(1)
 
+    async def on_ready(self):
+        """Called when the bot is ready"""
+        logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
+        logger.info(f'Connected to {len(self.guilds)} guilds')
+
+        permissions = discord.Permissions(
+            send_messages=True,
+            read_messages=True,
+            attach_files=True,
+            embed_links=True,
+            use_external_emojis=True,
+            add_reactions=True,
+            read_message_history=True,
+        )
+
+        invite_link = discord.utils.oauth_url(
+            self.user.id,
+            permissions=permissions,
+            scopes=("bot", "applications.commands")
+        )
+
+        logger.info("Invite link:")
+        logger.info(invite_link)
+        logger.info("Bot is ready!")
+
     async def cleanup(self):
         """Clean up resources"""
-        print("Cleaning up resources...")
+        logger.info("Cleaning up resources...")
         try:
             if self.comfy_client:
                 await self.comfy_client.close()
             await self.close()
         except Exception as e:
-            print(f"Error during cleanup: {e}")
+            logger.error(f"Error during cleanup: {e}")
 
     async def load_plugins(self):
         """Load plugins from the plugins directory"""
         plugins_dir = Path(self.plugins_path)
         if not plugins_dir.exists():
-            print("No plugins directory found")
+            logger.warn("No plugins directory found")
             return
 
         import sys
@@ -93,128 +120,61 @@ class ComfyUIBot(commands.Bot):
         plugin_files = [f for f in plugins_dir.glob("*.py") if f.name != "__init__.py"]
 
         for plugin_file in plugin_files:
-            print(f"\n{'=' * 50}")
-            print(f"Loading plugin file: {plugin_file}")
-            print(f"{'=' * 50}")
+            logger.info(f"Loading plugin: {plugin_file}")
 
             try:
-
                 spec = importlib.util.spec_from_file_location(
                     plugin_file.stem,
                     plugin_file
                 )
                 if spec is None:
-                    print(f"Failed to get spec for {plugin_file}")
+                    logger.warning(f"Failed to get spec for {plugin_file}")
                     continue
 
                 module = importlib.util.module_from_spec(spec)
                 if spec.loader is None:
-                    print(f"Failed to get loader for {plugin_file}")
+                    logger.warning(f"Failed to get loader for {plugin_file}")
                     continue
 
                 spec.loader.exec_module(module)
-                print(f"Successfully loaded module: {module.__name__}")
+                logger.debug(f"Successfully loaded module: {module.__name__}")
 
-                print("\nModule contents:")
                 for item_name in dir(module):
                     if item_name.startswith('__'):
                         continue
 
                     try:
                         obj = getattr(module, item_name)
-                        print(f"Found item: {item_name} (type: {type(obj)})")
 
                         if inspect.isclass(obj):
-                            print(f"  - Is class: Yes")
-
                             try:
                                 from ..core.plugin import Plugin
                                 if issubclass(obj, Plugin):
-                                    print(f"  - Is Plugin subclass: Yes")
                                     if obj != Plugin:
-                                        print(f"\nInitializing plugin: {obj.__name__}")
                                         try:
                                             plugin_instance = obj(self)
-                                            print(f"Successfully created instance")
-                                            print(f"Running on_load...")
+                                            logger.debug(f"Running on_load...")
                                             await plugin_instance.on_load()
-                                            print(f"on_load completed")
+                                            logger.debug(f"on_load completed")
                                             self.plugins.append(plugin_instance)
-                                            print(f"Successfully loaded and registered plugin: {obj.__name__}\n")
+                                            logger.info(f"Successfully loaded and registered plugin: {obj.__name__}")
                                         except Exception as e:
-                                            print(f"Error instantiating plugin {obj.__name__}: {e}")
+                                            logger.error(f"Error instantiating plugin {obj.__name__}: {e}")
                                             import traceback
                                             traceback.print_exc()
-                                else:
-                                    print(f"  - Is Plugin subclass: No")
                             except Exception as e:
-                                print(f"  - Error checking Plugin subclass: {e}")
-                        else:
-                            print(f"  - Is class: No")
+                                logger.error(f"  - Error checking Plugin subclass: {e}")
                     except Exception as e:
-                        print(f"Error processing item {item_name}: {e}")
+                        logger.error(f"Error processing item {item_name}: {e}")
 
             except Exception as e:
-                print(f"Failed to load plugin {plugin_file}: {e}")
+                logger.error(f"Failed to load plugin {plugin_file}: {e}")
                 import traceback
                 traceback.print_exc()
 
-        print(f"\nLoaded {len(self.plugins)} plugins:")
+        logger.info(f"Loaded {len(self.plugins)} plugins:")
         for plugin in self.plugins:
-            print(f"- {plugin.__class__.__name__}")
-
-    async def process_generation(self, workflow_json: dict, prompt: str, message: discord.Message):
-        try:
-            modified_workflow = workflow_json.copy()
-            hook_results = await self.hook_manager.execute_hook('pre_generate', modified_workflow, prompt)
-
-            for result in hook_results:
-                if isinstance(result, dict):
-                    modified_workflow.update(result)
-
-            result = await self.comfy_client.generate(modified_workflow)
-            if 'error' in result:
-                raise Exception(result['error'])
-
-            prompt_id = result.get('prompt_id')
-            if not prompt_id:
-                raise Exception("No prompt ID received from ComfyUI")
-
-            async def update_message(status: str, image_file: Optional[discord.File] = None):
-                try:
-                    if image_file:
-                        await self.hook_manager.execute_hook(
-                            'generation_complete',
-                            prompt,
-                            str(image_file.filename),
-                            True
-                        )
-                except Exception as e:
-                    print(f"Error in generation hooks: {e}")
-
-                new_embed = message.embeds[0].copy()
-
-                for i, field in enumerate(new_embed.fields):
-                    if field.name == "Status":
-                        new_embed.set_field_at(i, name="Status", value=status, inline=False)
-                        break
-
-                if image_file:
-                    await message.edit(embed=new_embed, attachments=[image_file])
-                else:
-                    await message.edit(embed=new_embed)
-
-            await self.comfy_client.listen_for_updates(prompt_id, update_message)
-
-        except Exception as e:
-
-            await self.hook_manager.execute_hook(
-                'generation_complete',
-                prompt,
-                None,
-                False
-            )
-            raise
+            logger.info(f"- {plugin.__class__.__name__}")
 
     async def handle_generation(self,
                                 interaction: discord.Interaction,
@@ -359,27 +319,3 @@ class ComfyUIBot(commands.Bot):
                 )
             raise
 
-    async def on_ready(self):
-        """Called when the bot is ready"""
-        print(f'Logged in as {self.user} (ID: {self.user.id})')
-        print(f'Connected to {len(self.guilds)} guilds')
-
-        permissions = discord.Permissions(
-            send_messages=True,
-            read_messages=True,
-            attach_files=True,
-            embed_links=True,
-            use_external_emojis=True,
-            add_reactions=True,
-            read_message_history=True,
-        )
-
-        invite_link = discord.utils.oauth_url(
-            self.user.id,
-            permissions=permissions,
-            scopes=("bot", "applications.commands")
-        )
-
-        print("\nInvite link:")
-        print(invite_link)
-        print("\nBot is ready!")

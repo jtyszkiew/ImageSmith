@@ -1,5 +1,7 @@
 import asyncio
 
+from logger import logger
+
 
 class GenerationQueue:
     """Manages queued generation requests"""
@@ -12,7 +14,7 @@ class GenerationQueue:
     async def add_to_queue(self, generation_func, *args, **kwargs):
         """Add a new generation request to the queue"""
         await self.queue.put((generation_func, args, kwargs))
-        print(f"Added new generation to queue. Queue size: {self.queue.qsize()}")
+        logger.info(f"Added new generation to queue. Queue size: {self.queue.qsize()}")
 
         if not self.processing:
             asyncio.create_task(self.process_queue())
@@ -26,13 +28,13 @@ class GenerationQueue:
         try:
             while not self.queue.empty():
                 generation_func, args, kwargs = await self.queue.get()
-                print(f"Processing generation from queue. Remaining: {self.queue.qsize()}")
+                logger.info(f"Processing generation from queue. Remaining: {self.queue.qsize()}")
 
                 try:
                     self.current_task = asyncio.current_task()
                     await generation_func(*args, **kwargs)
                 except Exception as e:
-                    print(f"Error processing generation: {e}")
+                    logger.error(f"Error processing generation: {e}")
                 finally:
                     self.current_task = None
                     self.queue.task_done()

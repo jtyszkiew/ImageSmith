@@ -5,6 +5,8 @@ from typing import Dict, Optional
 
 import yaml
 
+from logger import logger
+
 
 class WorkflowManager:
     """Manages ComfyUI workflows and their configurations"""
@@ -22,7 +24,7 @@ class WorkflowManager:
 
         # Ensure input directory exists
         self.input_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Using ComfyUI input directory: {self.input_dir}")
+        logger.info(f"Using ComfyUI input directory: {self.input_dir}")
 
     def update_workflow_nodes(self, workflow_json: dict, workflow_config: dict,
                               prompt: str = None, image_data: bytes = None) -> dict:
@@ -36,7 +38,7 @@ class WorkflowManager:
                 node = modified_workflow[node_id]
                 if 'inputs' in node and 'text' in node['inputs']:
                     node['inputs']['text'] = prompt
-                    print(f"Updated prompt in node {node_id}: {prompt}")
+                    logger.debug(f"Updated prompt in node {node_id}: {prompt}")
 
         # Update image if provided and node is configured
         if image_data and 'image_input_node_id' in workflow_config:
@@ -51,19 +53,19 @@ class WorkflowManager:
 
                 # Save the image
                 file_path.write_bytes(image_data)
-                print(f"Saved input image to: {file_path}")
+                logger.debug(f"Saved input image to: {file_path}")
 
                 # Update node with image path
                 node = modified_workflow[node_id]
                 if 'inputs' in node and 'image' in node['inputs']:
                     # Just use the filename for ComfyUI
                     node['inputs']['image'] = filename
-                    print(f"Updated image in node {node_id} with filename: {filename}")
+                    logger.debug(f"Updated image in node {node_id} with filename: {filename}")
                 else:
                     raise ValueError(f"Node {node_id} does not have 'image' input")
 
             except Exception as e:
-                print(f"Error updating image node: {e}")
+                logger.error(f"Error updating image node: {e}")
                 if file_path.exists():
                     try:
                         file_path.unlink()  # Clean up the file if there was an error
@@ -120,9 +122,9 @@ class WorkflowManager:
                     locals()[setting_name](workflow_json, *params)
                 else:
                     locals()[setting_name](workflow_json)
-                print(f"Applied setting: {setting_name}")
+                logger.debug(f"Applied setting: {setting_name}")
         except Exception as e:
-            print(f"Error applying setting {setting_name}: {e}")
+            logger.error(f"Error applying setting {setting_name}: {e}")
 
     def _find_setting_def(self, workflow: dict, setting_name: str) -> Optional[dict]:
         """Find setting definition in workflow settings"""
@@ -145,7 +147,7 @@ class WorkflowManager:
             # Apply __before settings if they exist
             before_setting = self._find_setting_def(workflow, '__before')
             if before_setting:
-                print("Applying __before settings...")
+                logger.debug("Applying __before settings...")
                 self._apply_setting(workflow_json, '__before', before_setting)
 
             # Apply custom settings if provided
@@ -169,18 +171,18 @@ class WorkflowManager:
                     if setting_def:
                         self._apply_setting(workflow_json, func_name, setting_def, params)
                     else:
-                        print(f"Warning: Setting '{func_name}' not found in workflow configuration")
+                        logger.warning(f"Setting '{func_name}' not found in workflow configuration")
 
             # Apply __after settings if they exist
             after_setting = self._find_setting_def(workflow, '__after')
             if after_setting:
-                print("Applying __after settings...")
+                logger.debug("Applying __after settings...")
                 self._apply_setting(workflow_json, '__after', after_setting)
 
             return workflow_json
 
         except Exception as e:
-            print(f"Error applying settings: {e}")
+            logger.error(f"Error applying settings: {e}")
             return workflow_json
 
     def prepare_workflow(self, workflow_name: str, prompt: str = None,
@@ -208,5 +210,5 @@ class WorkflowManager:
 
             return workflow_json
         except Exception as e:
-            print(f"Error preparing workflow: {e}")
+            logger.error(f"Error preparing workflow: {e}")
             raise

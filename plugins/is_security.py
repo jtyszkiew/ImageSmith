@@ -2,7 +2,7 @@ from typing import Optional
 
 import discord
 
-from src.bot.imagesmith import SecurityResult
+from src.bot.imagesmith import SecurityResult, logger
 from src.core.plugin import Plugin
 from src.core.security import SecurityManager
 
@@ -43,5 +43,5 @@ class SecurityPlugin(Plugin):
             return SecurityResult(True)
 
         except Exception as e:
-            print(f"Error in security check: {e}")
+            logger.error(f"Error in security check: {e}")
             return SecurityResult(False, "An error occurred while checking permissions")

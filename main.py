@@ -2,13 +2,13 @@ import asyncio
 import os
 import sys
 
+from logger import logger
 from src.bot.imagesmith import ComfyUIBot
-
 
 async def main():
     bot = ComfyUIBot()
 
-    print("Starting bot...")
+    logger.info("Starting bot...")
     try:
         await bot.start(os.getenv('DISCORD_TOKEN') or bot.workflow_manager.config['discord']['token'])
     except KeyboardInterrupt:

@@ -15,6 +15,8 @@ from enum import Enum
 import random
 from dataclasses import dataclass
 
+from logger import logger
+
 
 class LoadBalanceStrategy(Enum):
     ROUND_ROBIN = "round_robin"
@@ -82,12 +84,12 @@ class ComfyUIInstance:
             )
 
             self.connected = True
-            print(f"Connected to ComfyUI instance at {self.base_url}")
+            logger.info(f"Connected to ComfyUI instance at {self.base_url}")
 
         except Exception as e:
             self.connected = False
             await self.cleanup()
-            raise Exception(f"Failed to connect to ComfyUI instance {self.base_url}: {e}")
+            raise logger.error(f"Failed to connect to ComfyUI instance {self.base_url}: {e}")
 
     async def cleanup(self):
         """Clean up instance connections"""
@@ -101,7 +103,7 @@ class ComfyUIInstance:
                     self.session = None
                 self.connected = False
             except Exception as e:
-                print(f"Error during cleanup of instance {self.base_url}: {e}")
+                logger.error(f"Error during cleanup of instance {self.base_url}: {e}")
 
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create an HTTP session with proper authentication"""
@@ -169,7 +171,7 @@ class ComfyUIClient:
         if connected_instances == 0:
             raise Exception("Failed to connect to any ComfyUI instance")
 
-        print(f"Connected to {connected_instances}/{len(self.instances)} ComfyUI instances")
+        logger.info(f"Connected to {connected_instances}/{len(self.instances)} ComfyUI instances")
 
     async def close(self):
         """Close connections to all instances"""
@@ -227,7 +229,6 @@ class ComfyUIClient:
                 }
 
                 session = await instance.get_session()
-                print(session.post)
                 async with session.post(
                         f"{instance.base_url}/prompt",
                         json=prompt_data
@@ -256,7 +257,7 @@ class ComfyUIClient:
             async with self.session.get(url) as response:
                 return response.status == 200
         except Exception as e:
-            print(f"Error testing image access: {e}")
+            logger.error(f"Error testing image access: {e}")
             return False
 
     def _get_image_url(self, instance: ComfyUIInstance, image_data: dict) -> str:
@@ -276,10 +277,10 @@ class ComfyUIClient:
 
             query_string = '&'.join(params)
             url = f"{instance.base_url}/view?{query_string}"
-            print(f"Generated image URL: {url}")
+            logger.debug(f"Generated image URL: {url}")
             return url
         except Exception as e:
-            print(f"Error generating image URL: {e}")
+            logger.error(f"Error generating image URL: {e}")
             return None
 
     def _create_progress_bar(self, value: int, max_value: int, length: int = 10) -> str:
@@ -378,19 +379,22 @@ class ComfyUIClient:
                             instance.active_prompts.remove(prompt_id)
                         if prompt_id in self.prompt_to_instance:
                             del self.prompt_to_instance[prompt_id]
-                        print(f"ComfyUI Error: {error_msg}")
-                        await message_callback(f"❌ Error: {error_msg}")
+
+                        logger.error(f"ComfyUI Error: {error_msg}")
+
+                        # We don't want to expose the error message to the user
+                        await message_callback(f"❌ Error: ComfyUI Error, check logs for more information.")
                         raise Exception(f"ComfyUI Error: {error_msg}")
 
                 except websockets.ConnectionClosed:
-                    print("WebSocket connection closed unexpectedly")
+                    logger.error("WebSocket connection closed unexpectedly")
                     await message_callback("❌ Connection closed unexpectedly")
                     raise
                 except json.JSONDecodeError as e:
-                    print(f"Failed to parse WebSocket message: {e}")
+                    logger.error(f"Failed to parse WebSocket message: {e}")
                     continue
                 except Exception as e:
-                    print(f"Error while listening for updates: {str(e)}")
+                    logger.error(f"Error while listening for updates: {str(e)}")
                     await message_callback(f"❌ Error: {str(e)}")
                     raise
 

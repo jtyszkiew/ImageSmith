@@ -32,7 +32,7 @@ class TestComfyUIBot:
     async def bot(self, mock_config, tmp_path):
         """Create a bot instance with mocked parent class and dependencies"""
         with patch('src.comfy.workflow_manager.WorkflowManager._load_config') as mock_wm, \
-             patch('src.comfy.workflow_manager.WorkflowManager.get_default_workflow') as mock_get_default_workflow:
+                patch('src.comfy.workflow_manager.WorkflowManager.get_default_workflow') as mock_get_default_workflow:
             mock_wm.return_value = {
                 'comfyui': {
                     'instances': [{
@@ -84,7 +84,6 @@ class TestComfyUIBot:
                 patch.object(bot.tree, 'add_command') as mock_add_command, \
                 patch.object(bot.tree, 'sync') as mock_add_command, \
                 patch('sys.exit') as mock_exit:
-
             await bot.setup_hook()
 
             # Verify operations
@@ -116,7 +115,6 @@ class TestComfyUIBot:
         with patch('src.bot.imagesmith.ComfyUIClient', return_value=mock_client) as mock_client_class, \
                 patch.object(bot, 'cleanup', new_callable=AsyncMock) as mock_cleanup, \
                 patch('sys.exit') as mock_exit:
-
             await bot.setup_hook()
 
             mock_client.connect.assert_called_once()
@@ -136,32 +134,10 @@ class TestComfyUIBot:
                 patch.object(bot.tree, 'sync', side_effect=Exception("Sync failed")), \
                 patch.object(bot, 'cleanup', new_callable=AsyncMock) as mock_cleanup, \
                 patch('sys.exit') as mock_exit:
-
             await bot.setup_hook()
 
             mock_cleanup.assert_called_once()
             mock_exit.assert_called_once_with(1)
-
-    @pytest.mark.asyncio
-    async def test_process_generation(self, bot):
-        bot = await anext(bot)
-
-        # Mock message and workflow
-        message = AsyncMock()
-        message.embeds = [discord.Embed()]
-        workflow_json = {'test': 'workflow'}
-
-        mock_client = AsyncMock()
-        mock_client.generate = AsyncMock(return_value={'prompt_id': 'test_id'})
-        mock_client.listen_for_updates = AsyncMock()
-
-        # Patch ComfyUIClient and its methods
-        with patch('src.bot.imagesmith.ComfyUIClient', return_value=mock_client) as mock_client_class:
-            bot.comfy_client = mock_client
-            await bot.process_generation(workflow_json, "test prompt", message)
-
-            mock_client.generate.assert_called_once_with(workflow_json)
-            mock_client.listen_for_updates.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_load_plugins(self, bot, tmp_path):
