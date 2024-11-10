@@ -204,10 +204,11 @@ class MyPlugin(Plugin):
 
 ### Available Hooks
 
-- `pre_security_check`: Called before security checks
-- `security_check`: Called during security checks
-- `pre_generate`: Called before generation starts
-- `generation_complete`: Called when generation finishes
+- `is.comfyui.client.before_create`: Called before ComfyUI client creation
+- `is.comfyui.client.after_create`: Called after ComfyUI client creation
+- `is.security.before`: Called just before the security module is checking permissions
+- `is.comfyui.client.instance.timeout`: Called when one of instances goes timeout (can be set by param `timeout` in configuration)
+- `is.comfyui.client.instance.reconnect`: Reconnect is called before generation if instance is disconnected (timeout)
 
 Hooks & Plugins are work in progress and will be expanded in the future.
 

@@ -50,7 +50,7 @@ class TestSecurityPlugin:
     @pytest.mark.asyncio
     async def test_plugin_initialization(self, security_plugin):
         await security_plugin.on_load()
-        assert 'security_check' in security_plugin.bot.hook_manager.hooks
+        assert 'is.security' in security_plugin.bot.hook_manager.hooks
 
     @pytest.mark.asyncio
     async def test_security_check_allowed_user(self, security_plugin, mock_interaction):

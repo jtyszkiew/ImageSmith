@@ -16,7 +16,7 @@ class SecurityPlugin(Plugin):
     async def on_load(self):
         """Register hooks when plugin loads"""
         await super().on_load()
-        self.bot.hook_manager.register_hook('security_check', self.check_security)
+        self.bot.hook_manager.register_hook('is.security', self.check_security)
 
     async def check_security(self,
                              interaction: discord.Interaction,

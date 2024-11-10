@@ -48,7 +48,10 @@ class ComfyUIBot(commands.Bot):
         await self.load_plugins()
 
         try:
-            self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['instances'])
+            await self.hook_manager.execute_hook('is.comfyui.client.before_create', self.workflow_manager.config['comfyui']['instances'])
+            self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['instances'], self.hook_manager)
+            await self.hook_manager.execute_hook('is.comfyui.client.after_create', self.workflow_manager.config['comfyui']['instances'])
+
             await self.comfy_client.connect()
             logger.info("Connected to ComfyUI")
         except Exception as e:
@@ -188,11 +191,11 @@ class ComfyUIBot(commands.Bot):
             workflow_name = workflow or self.workflow_manager.get_default_workflow(workflow_type)
             workflow_config = self.workflow_manager.get_workflow(workflow_name)
 
-            await self.hook_manager.execute_hook('pre_security_check', interaction, workflow_name, workflow_type,
+            await self.hook_manager.execute_hook('is.security.before', interaction, workflow_name, workflow_type,
                                                  prompt, workflow_config, settings)
 
             security_results: list[SecurityResult] = await self.hook_manager.execute_hook(
-                'security_check',
+                'is.security',
                 interaction, workflow_name, workflow_type, prompt, workflow_config, settings
             )
 
