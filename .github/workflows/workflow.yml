@@ -21,3 +21,7 @@ jobs:
       contents: read
       packages: write
       pull-requests: read
+  deploy_to_vps:
+    needs: [deploy_docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/deploy.yml
