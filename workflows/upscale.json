@@ -161,7 +161,7 @@
   },
   "16": {
     "inputs": {
-      "ckpt_name": "Juggernaut_X_RunDiffusion.safetensors"
+      "ckpt_name": "sd_xl_base_1.0.safetensors.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {

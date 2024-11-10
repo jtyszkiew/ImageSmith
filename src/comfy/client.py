@@ -71,13 +71,8 @@ class ComfyUIInstance:
             if self.auth and self.auth.api_key:
                 ws_headers['Authorization'] = f'Bearer {self.auth.api_key}'
 
-            ws_headers['Connection'] = 'Upgrade'
-            ws_headers['Upgrade'] = 'websocket'
-            ws_headers['Sec-WebSocket-Version'] = '13'
-
             ws_kwargs = {
                 'origin': self.base_url,
-                'extra_headers': ws_headers
             }
 
             if self.ws_url.startswith('wss://'):

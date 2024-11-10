@@ -14,13 +14,7 @@ from ..comfy.workflow_manager import WorkflowManager
 from ..core.hook_manager import HookManager
 from ..core.generation_queue import GenerationQueue
 from ..comfy.client import ComfyUIClient
-
-
-class SecurityResult:
-
-    def __init__(self, state: bool, message: str = ""):
-        self.state = state
-        self.message = message
+from ..core.security import SecurityManager, BasicSecurity, SecurityResult
 
 
 class ComfyUIBot(commands.Bot):
@@ -35,12 +29,16 @@ class ComfyUIBot(commands.Bot):
         super().__init__(command_prefix='/', intents=intents)
 
         self.workflow_manager = WorkflowManager(configuration_path)
+        self.security_manager = SecurityManager()
         self.hook_manager = HookManager()
         self.comfy_client = None
         self.plugins = []
         self.active_generations = {}
         self.generation_queue = GenerationQueue()
         self.plugins_path = plugins_path
+
+        # This is temporary solution before rewriting the SecurityManager
+        self.basic_security = BasicSecurity(self)
 
     async def setup_hook(self) -> None:
         """Setup hook that runs when the bot starts"""
