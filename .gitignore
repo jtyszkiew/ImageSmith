@@ -40,4 +40,3 @@ htmlcov/
 
 /plugins
 !/plugins/__init__.py
-!/plugins/is_*.py

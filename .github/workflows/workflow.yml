@@ -1,0 +1,23 @@
+name: Test and build
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: read
+
+on:
+  pull_request:
+    branches: [ "master" ]
+  push:
+    branches: [ "master" ]
+
+jobs:
+  test:
+    uses: ./.github/workflows/build-and-test.yml
+  deploy_docker:
+    needs: [test]
+    uses: ./.github/workflows/docker-publish.yml
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read

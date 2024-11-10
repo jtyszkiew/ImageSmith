@@ -28,8 +28,9 @@ Magical bot that will create workflows for you. You need to create them yourself
 - Running ComfyUI instance
 - Discord Bot Token
 
-### Installation
+## Installation
 
+### From source
 1. Clone the repository:
 ```bash
 git clone https://github.com/jtyszkiew/ImageSmith.git
@@ -79,6 +80,37 @@ workflowjson["4"]["inputs"]["ckpt_name"]
 
 ```bash
 python main.py
+```
+## Docker
+
+### Basic run
+For basic run you need to only set the `DISCORD_TOKEN` environment variable.
+
+> [!IMPORTANT]  
+> Default [`forge`, `reforge`, `upscale`] workflows are using `sd_xl_base_1.0` ([Model on HuggingFace](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/sd_xl_base_1.0.safetensors)) 
+> 
+> Default [`txt2vid`] workflow is using Mochi models from [this manual](https://blog.comfy.org/mochi-1/)
+> 
+> You need to have these models in your ComfyUI instance if you want to test the bot with default workflows without any changes.
+
+```bash
+docker run -e DISCORD_TOKEN="<your_discord_token>" ghcr.io/jtyszkiew/imagesmith:latest
+```
+
+### Custom configuration
+If you want to change the `configuration.yml` file (and you want to change it for sure in scenarios other than "basic run")
+```bash
+docker run -e DISCORD_TOKEN="<your_discord_token>" --mount type=bind,source=./configuration.yml,target=/app/configuration.yml ghcr.io/jtyszkiew/imagesmith:latest
+```
+
+### Custom configuration and custom workflows
+If you want changed `configuration.yml` and custom workflows that will be placed in `/app/custom_workflows` directory inside container.
+
+> [!IMPORTANT]  
+> Remember that you should use the docker container paths in `configuration.yml` file. Either start your `workflow` configuration section from `/app/custom_workflows` or `./custom_workflows`.
+
+```bash
+docker run -e DISCORD_TOKEN="<your_discord_token>" --mount type=bind,source=./configuration.yml,target=/app/configuration.yml -v "./custom_workflows:/app/custom_workflows" ghcr.io/jtyszkiew/imagesmith:latest
 ```
 
 ## 💬 Usage
