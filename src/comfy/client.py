@@ -1,6 +1,7 @@
 import io
 import ssl
 import urllib
+from datetime import datetime, timedelta
 
 import discord
 from typing import List, Optional, Dict
@@ -37,7 +38,8 @@ class ComfyUIInstance:
     def __init__(self,
                  base_url: str,
                  weight: int = 1,
-                 auth: Optional[ComfyUIAuth] = None):
+                 auth: Optional[ComfyUIAuth] = None,
+                 timeout: int = 900):
         self.base_url = base_url.rstrip('/')
         self.ws_url = self.base_url.replace('http', 'ws')
         self.weight = weight
@@ -47,34 +49,37 @@ class ComfyUIInstance:
         self.client_id = str(uuid.uuid4())
         self.active_generations = 0
         self.total_generations = 0
-        self.last_used = 0
+        self.last_used = datetime.now()
         self.connected = False
         self._lock = asyncio.Lock()
-        self.active_prompts = set()  # Track active prompt IDs
+        self.active_prompts = set()
+        self.timeout = timeout
+        self.timeout_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
         """Initialize instance connections"""
         try:
             session = await self.get_session()
 
-            # Test connection to API
             async with session.get(f"{self.base_url}/history") as response:
                 if response.status == 401:
                     raise Exception("Authentication failed")
                 elif response.status != 200:
                     raise Exception(f"Failed to connect to ComfyUI API: {response.status}")
 
-            # Connect to WebSocket with authentication if needed
             ws_headers = {}
             if self.auth and self.auth.api_key:
                 ws_headers['Authorization'] = f'Bearer {self.auth.api_key}'
 
-            # Determine WebSocket connection parameters
+            ws_headers['Connection'] = 'Upgrade'
+            ws_headers['Upgrade'] = 'websocket'
+            ws_headers['Sec-WebSocket-Version'] = '13'
+
             ws_kwargs = {
+                'origin': self.base_url,
                 'extra_headers': ws_headers
             }
 
-            # Only add SSL settings for secure WebSocket connections
             if self.ws_url.startswith('wss://'):
                 ws_kwargs['ssl'] = self.auth.ssl_verify if self.auth else True
 
@@ -90,6 +95,17 @@ class ComfyUIInstance:
             self.connected = False
             await self.cleanup()
             raise logger.error(f"Failed to connect to ComfyUI instance {self.base_url}: {e}")
+
+    async def mark_used(self):
+        """Mark the instance as recently used"""
+        self.last_used = datetime.now()
+
+    def is_timed_out(self) -> bool:
+        """Check if instance has timed out"""
+        if self.timeout <= 0:
+            return False
+        time_since_last_use = datetime.now() - self.last_used
+        return time_since_last_use > timedelta(seconds=self.timeout)
 
     async def cleanup(self):
         """Clean up instance connections"""
@@ -139,13 +155,15 @@ class ComfyUIInstance:
 class ComfyUIClient:
     """Load-balanced client for interacting with multiple ComfyUI instances"""
 
-    def __init__(self, instances_config: List[Dict]):
+    def __init__(self, instances_config: List[Dict], hook_manager=None):
         self.instances: List[ComfyUIInstance] = []
         self.strategy = LoadBalanceStrategy.LEAST_BUSY
         self.current_instance_index = 0
-        self.prompt_to_instance = {}  # Map prompt IDs to instances
+        self.prompt_to_instance = {}
+        self.hook_manager = hook_manager
+        self.timeout_check_task = None
+        self.timeout_check_interval = 60
 
-        # Initialize instances from config
         for instance_config in instances_config:
             auth = None
             if 'auth' in instance_config:
@@ -154,7 +172,8 @@ class ComfyUIClient:
             instance = ComfyUIInstance(
                 base_url=instance_config['url'],
                 weight=instance_config.get('weight', 1),
-                auth=auth
+                auth=auth,
+                timeout=instance_config.get('timeout', 900)
             )
             self.instances.append(instance)
 
@@ -166,15 +185,40 @@ class ComfyUIClient:
         connect_tasks = [instance.initialize() for instance in self.instances]
         results = await asyncio.gather(*connect_tasks, return_exceptions=True)
 
-        # Check if at least one instance connected successfully
         connected_instances = sum(1 for instance in self.instances if instance.connected)
         if connected_instances == 0:
             raise Exception("Failed to connect to any ComfyUI instance")
 
         logger.info(f"Connected to {connected_instances}/{len(self.instances)} ComfyUI instances")
 
+        # Start timeout checker
+        self.timeout_check_task = asyncio.create_task(self._check_timeouts())
+
+    async def _check_timeouts(self):
+        """Periodically check for timed out instances"""
+        while True:
+            try:
+                for instance in self.instances:
+                    if instance.connected and instance.is_timed_out() and not instance.active_prompts:
+                        logger.info(f"Instance {instance.base_url} timed out, cleaning up...")
+                        await instance.cleanup()
+                        if self.hook_manager:
+                            await self.hook_manager.execute_hook('is.comfyui.client.instance.timeout',
+                                                                 instance.base_url)
+            except Exception as e:
+                logger.error(f"Error in timeout checker: {e}")
+
+            await asyncio.sleep(self.timeout_check_interval)
+
     async def close(self):
         """Close connections to all instances"""
+        if self.timeout_check_task:
+            self.timeout_check_task.cancel()
+            try:
+                await self.timeout_check_task
+            except asyncio.CancelledError:
+                pass
+
         if hasattr(self, 'instances'):
             cleanup_tasks = [instance.cleanup() for instance in self.instances]
             await asyncio.gather(*cleanup_tasks, return_exceptions=True)
@@ -207,14 +251,32 @@ class ComfyUIClient:
                    key=lambda i: i.active_generations / i.weight)
 
     async def _get_instance(self) -> ComfyUIInstance:
+        instance = await self._select_instance()
+        await instance.mark_used()
+        return instance
+
+    async def _select_instance(self) -> ComfyUIInstance:
         strategies = {
             LoadBalanceStrategy.ROUND_ROBIN: self._select_instance_round_robin,
             LoadBalanceStrategy.RANDOM: self._select_instance_random,
             LoadBalanceStrategy.LEAST_BUSY: self._select_instance_least_busy
         }
 
-        instance = strategies[self.strategy]()
-        return instance
+        # Filter out disconnected or timed out instances
+        available_instances = [i for i in self.instances if i.connected and not i.is_timed_out()]
+
+        if not available_instances:
+            for instance in self.instances:
+                if not instance.connected and not instance.active_prompts:
+                    await self.hook_manager.execute_hook('is.comfyui.client.instance.reconnect', instance.base_url)
+                    await instance.initialize()
+
+            available_instances = [i for i in self.instances if i.connected]
+            if not available_instances:
+                raise Exception("No available instances")
+
+        self.instances = available_instances
+        return strategies[self.strategy]()
 
     async def generate(self, workflow: dict) -> dict:
         instance = await self._get_instance()

@@ -1,6 +1,7 @@
 # tests/comfy/test_client.py
 import json
 import ssl
+import time
 import urllib
 
 import aiohttp
@@ -11,6 +12,7 @@ from unittest.mock import Mock, AsyncMock, patch
 import websockets
 
 from src.comfy.client import ComfyUIClient, ComfyUIInstance, LoadBalanceStrategy, ComfyUIAuth
+from src.core.hook_manager import HookManager
 
 
 class MockAsyncContextManager:
@@ -548,3 +550,55 @@ class TestComfyUIClient:
             # Verify connector was created with default SSL settings (True)
             connector_call = mock_connector_class.call_args
             assert connector_call.kwargs.get('ssl') is True
+
+    @pytest.mark.asyncio
+    async def test_instance_timeout(self, mock_session):
+        hook_manager = Mock()
+        hook_manager.execute_hook = AsyncMock()
+        client = ComfyUIClient([{'url': 'http://localhost:8188', 'weight': 2, 'timeout': 1}], hook_manager)
+        client.timeout_check_interval = 0.1
+
+        instances = []
+        instance = AsyncMock()
+        instance.client_id = f'test_id_'
+        instance.connected = True
+        instance._lock = asyncio.Lock()
+        instance.base_url = f'http://localhost:8188'
+        instance.get_session = AsyncMock(return_value=mock_session)
+        instance.is_timed_out = lambda : True
+        instance.active_prompts = set()
+        instances.append(instance)
+
+        client.instances = instances
+        await client.connect()
+        await asyncio.sleep(0.1)
+
+        hook_manager.execute_hook.assert_awaited_with('is.comfyui.client.instance.timeout', instances[0].base_url)
+
+    @pytest.mark.asyncio
+    async def test_instance_reconnect(self, mock_session):
+        hook_manager = Mock()
+        hook_manager.execute_hook = AsyncMock()
+        client = ComfyUIClient([{'url': 'http://localhost:8188', 'weight': 2, 'timeout': 1}], hook_manager)
+
+        instances = []
+        instance = AsyncMock()
+        instance.client_id = f'test_id_'
+        instance.connected = False
+        instance._lock = asyncio.Lock()
+        instance.base_url = f'http://localhost:8188'
+        instance.get_session = AsyncMock(return_value=mock_session)
+        instance.is_timed_out = lambda : True
+        instance.active_prompts = set()
+        instances.append(instance)
+
+        client.instances = instances
+        # Don't care about the exception
+        try:
+            await client.generate({'test': 'workflow'})
+        except:
+            pass
+
+        await asyncio.sleep(0.1)
+
+        hook_manager.execute_hook.assert_awaited_with('is.comfyui.client.instance.reconnect', instances[0].base_url)
