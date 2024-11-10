@@ -1,7 +1,7 @@
 name: Deploy ImageSmith
 
 on:
-  workflow_dispatch:
+  workflow_call:
 
 jobs:
   deploy:
