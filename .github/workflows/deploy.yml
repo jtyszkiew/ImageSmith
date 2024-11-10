@@ -2,6 +2,13 @@ name: Deploy ImageSmith
 
 on:
   workflow_call:
+    secrets:
+      SSH_HOST:
+        required: true
+      SSH_PRIVATE_KEY:
+        required: true
+      APP_PATH:
+        required: true
 
 jobs:
   deploy:

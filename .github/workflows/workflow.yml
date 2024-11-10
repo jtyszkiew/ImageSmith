@@ -25,3 +25,7 @@ jobs:
     needs: [deploy_docker]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     uses: ./.github/workflows/deploy.yml
+    secrets:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      APP_PATH: ${{ secrets.APP_PATH }}
