@@ -1,0 +1,28 @@
+name: Deploy ImageSmith
+
+on:
+  push:
+    branches: [ "feature/deploy" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: deploy-bot
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Pull latest image
+            sudo docker compose -f ${{ secrets.APP_PATH }}/docker-compose.yml pull
+            
+            # Restart service
+            sudo docker compose -f ${{ secrets.APP_PATH }}/docker-compose.yml up -d
+
+            # Cleanup old images
+            docker image prune -f
