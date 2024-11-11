@@ -73,6 +73,7 @@ class ComfyUIInstance:
 
             ws_kwargs = {
                 'origin': self.base_url,
+                'extra_headers': ws_headers,
             }
 
             if self.ws_url.startswith('wss://'):
@@ -157,7 +158,7 @@ class ComfyUIClient:
         self.prompt_to_instance = {}
         self.hook_manager = hook_manager
         self.timeout_check_task = None
-        self.timeout_check_interval = 60
+        self.timeout_check_interval = 5
 
         for instance_config in instances_config:
             auth = None
@@ -263,6 +264,7 @@ class ComfyUIClient:
         if not available_instances:
             for instance in self.instances:
                 if not instance.connected and not instance.active_prompts:
+                    logger.info(f"Attempting to reconnect to instance {instance.base_url}")
                     await self.hook_manager.execute_hook('is.comfyui.client.instance.reconnect', instance.base_url)
                     await instance.initialize()
 
