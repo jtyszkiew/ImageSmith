@@ -30,7 +30,6 @@ class SecurityManager:
         allowed_roles = security_config.get('allowed_roles', [])
         member_roles = [role.name for role in member.roles]
 
-        print(security_config)
         if len(allowed_roles) > 0 and not any(role in allowed_roles for role in member_roles):
             return SecurityResult(False, f"You don't have required roles to use this workflow.")
 
