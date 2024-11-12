@@ -105,7 +105,7 @@ class BasicSecurity:
 
             if settings:
                 result = self.security_manager.validate_settings_string(
-                    interaction.user,
+                    interaction,
                     workflow_config,
                     settings
                 )
@@ -116,5 +116,5 @@ class BasicSecurity:
             return SecurityResult(True)
 
         except Exception as e:
-            logger.error(f"Error in security check: {e}")
+            logger.error(f"Error in security check: {e}", exc_info=True)
             return SecurityResult(False, "An error occurred while checking permissions")
