@@ -20,8 +20,24 @@ def mock_member():
     return member
 
 @pytest.fixture
+def mock_channel():
+    channel = Mock()
+    channel.name = "test_channel"
+    return channel
+
+
+@pytest.fixture
+def mock_interaction(mock_member, mock_channel):
+    interaction = Mock(spec=discord.Interaction)
+    interaction.user = mock_member
+    interaction.channel = mock_channel
+    return interaction
+
+
+@pytest.fixture
 def security_manager():
     return SecurityManager()
+
 
 @pytest.fixture
 def mock_bot():
@@ -30,56 +46,58 @@ def mock_bot():
     bot.hook_manager = Mock()
     return bot
 
+
 @pytest.fixture
 def basic_security(mock_bot):
     return BasicSecurity(mock_bot)
 
-class TestSecurityManager:
-    def test_check_user_permissions_disabled_security(self, security_manager, mock_member):
-        security_config = {"enabled": False}
-        assert security_manager._check_user_permissions(mock_member, security_config) is True
 
-    def test_check_user_permissions_allowed_user(self, security_manager, mock_member):
+class TestSecurityManager:
+    def test_check_user_permissions_disabled_security(self, security_manager, mock_interaction):
+        security_config = {"enabled": False}
+        assert security_manager._check_user_permissions(mock_interaction, security_config).state is True
+
+    def test_check_user_permissions_allowed_user(self, security_manager, mock_interaction):
         security_config = {
             "enabled": True,
             "allowed_users": ["test_user"]
         }
-        assert security_manager._check_user_permissions(mock_member, security_config) is True
+        assert security_manager._check_user_permissions(mock_interaction, security_config).state is True
 
-    def test_check_user_permissions_allowed_role(self, security_manager, mock_member):
+    def test_check_user_permissions_allowed_role(self, security_manager, mock_interaction):
         security_config = {
             "enabled": True,
             "allowed_roles": ["role1"]
         }
-        assert security_manager._check_user_permissions(mock_member, security_config) is True
+        assert security_manager._check_user_permissions(mock_interaction, security_config).state is True
 
-    def test_check_user_permissions_denied(self, security_manager, mock_member):
+    def test_check_user_permissions_denied(self, security_manager, mock_interaction):
         security_config = {
             "enabled": True,
             "allowed_users": ["other_user"],
             "allowed_roles": ["other_role"]
         }
-        assert security_manager._check_user_permissions(mock_member, security_config) is False
+        assert security_manager._check_user_permissions(mock_interaction, security_config).state is False
 
-    def test_check_workflow_access(self, security_manager, mock_member):
+    def test_check_workflow_access(self, security_manager, mock_interaction):
         workflow_config = {
             "security": {
                 "enabled": True,
                 "allowed_users": ["test_user"]
             }
         }
-        assert security_manager.check_workflow_access(mock_member, "test_workflow", workflow_config) is True
+        assert security_manager.check_workflow_access(mock_interaction, "test_workflow", workflow_config).state is True
 
-    def test_check_setting_access_system_settings(self, security_manager, mock_member):
+    def test_check_setting_access_system_settings(self, security_manager, mock_interaction):
         workflow_config = {}
-        assert security_manager.check_setting_access(mock_member, workflow_config, "__before") is True
-        assert security_manager.check_setting_access(mock_member, workflow_config, "__after") is True
+        assert security_manager.check_setting_access(mock_interaction, workflow_config, "__before").state is True
+        assert security_manager.check_setting_access(mock_interaction, workflow_config, "__after").state is True
 
-    def test_check_setting_access_nonexistent_setting(self, security_manager, mock_member):
+    def test_check_setting_access_nonexistent_setting(self, security_manager, mock_interaction):
         workflow_config = {"settings": []}
-        assert security_manager.check_setting_access(mock_member, workflow_config, "nonexistent") is False
+        assert security_manager.check_setting_access(mock_interaction, workflow_config, "nonexistent").state is False
 
-    def test_check_setting_access_allowed(self, security_manager, mock_member):
+    def test_check_setting_access_allowed(self, security_manager, mock_interaction):
         workflow_config = {
             "settings": [{
                 "name": "test_setting",
@@ -89,15 +107,15 @@ class TestSecurityManager:
                 }
             }]
         }
-        assert security_manager.check_setting_access(mock_member, workflow_config, "test_setting") is True
+        assert security_manager.check_setting_access(mock_interaction, workflow_config, "test_setting").state is True
 
-    def test_validate_settings_string_empty(self, security_manager, mock_member):
+    def test_validate_settings_string_empty(self, security_manager, mock_interaction):
         workflow_config = {}
-        valid, msg = security_manager.validate_settings_string(mock_member, workflow_config, None)
-        assert valid is True
-        assert msg == ""
+        result = security_manager.validate_settings_string(mock_interaction, workflow_config, None)
+        assert result.state is True
+        assert result.message == ""
 
-    def test_validate_settings_string_allowed(self, security_manager, mock_member):
+    def test_validate_settings_string_allowed(self, security_manager, mock_interaction):
         workflow_config = {
             "settings": [{
                 "name": "setting1",
@@ -107,11 +125,11 @@ class TestSecurityManager:
                 }
             }]
         }
-        valid, msg = security_manager.validate_settings_string(mock_member, workflow_config, "setting1")
-        assert valid is True
-        assert msg == ""
+        result = security_manager.validate_settings_string(mock_interaction, workflow_config, "setting1")
+        assert result.state is True
+        assert result.message == ""
 
-    def test_validate_settings_string_denied(self, security_manager, mock_member):
+    def test_validate_settings_string_denied(self, security_manager, mock_interaction):
         workflow_config = {
             "settings": [{
                 "name": "setting1",
@@ -121,9 +139,23 @@ class TestSecurityManager:
                 }
             }]
         }
-        valid, msg = security_manager.validate_settings_string(mock_member, workflow_config, "setting1")
-        assert valid is False
-        assert "permission" in msg
+        result = security_manager.validate_settings_string(mock_interaction, workflow_config, "setting1")
+        assert result.state is False
+        assert "permission" in result.message
+
+    def test_check_channel_permissions_allowed_role(self, security_manager, mock_interaction):
+        security_config = {
+            "enabled": True,
+            "allowed_channels": ["test_channel"]
+        }
+        assert security_manager._check_user_permissions(mock_interaction, security_config).state is True
+
+    def test_check_channel_permissions_not_allowed_role(self, security_manager, mock_interaction):
+        security_config = {
+            "enabled": True,
+            "allowed_channels": ["other_channel"]
+        }
+        assert security_manager._check_user_permissions(mock_interaction, security_config).state is False
 
 class TestBasicSecurity:
     @pytest.mark.asyncio
@@ -200,10 +232,7 @@ class TestBasicSecurity:
         assert "error occurred" in result.message.lower()
 
     @pytest.mark.asyncio
-    async def test_check_security_success(self, basic_security):
-        interaction = Mock(spec=discord.Interaction)
-        interaction.user = Mock(spec=discord.Member)
-        interaction.user.name = "test_user"
+    async def test_check_security_success(self, basic_security, mock_interaction):
         workflow_config = {
             "security": {
                 "enabled": True,
@@ -212,7 +241,7 @@ class TestBasicSecurity:
         }
 
         result = await basic_security.check_security(
-            interaction=interaction,
+            interaction=mock_interaction,
             workflow_name="test_workflow",
             workflow_type="test",
             prompt="test prompt",
