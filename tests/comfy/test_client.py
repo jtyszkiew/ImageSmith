@@ -1,7 +1,5 @@
-# tests/comfy/test_client.py
 import json
 import ssl
-import time
 import urllib
 
 import aiohttp
@@ -9,10 +7,7 @@ import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 
-import websockets
-
 from src.comfy.client import ComfyUIClient, ComfyUIInstance, LoadBalanceStrategy, ComfyUIAuth
-from src.core.hook_manager import HookManager
 
 
 class MockAsyncContextManager:
@@ -20,17 +15,26 @@ class MockAsyncContextManager:
         self.return_value = return_value
 
     async def __aenter__(self):
+        if isinstance(self.return_value, Exception):
+            raise self.return_value
+
         return self.return_value
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
 
+
 class MockPost:
     def __init__(self, response):
         self.response = response
+        self.args = None
+        self.kwargs = None
 
     def __call__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
         return MockAsyncContextManager(self.response)
+
 
 class TestComfyUIClient:
     @pytest.fixture
@@ -146,6 +150,7 @@ class TestComfyUIClient:
     @pytest.mark.asyncio
     async def test_instance_state_recovery(self, mocked_client, mock_instance, mock_session):
         """Test that instance state is recovered after errors"""
+
         # Make the first call fail
         def fail_once(*args, **kwargs):
             raise Exception("First attempt fails")
@@ -183,7 +188,7 @@ class TestComfyUIClient:
             instance.active_generations = i  # Different loads
             instance.weight = weight
             instance._lock = asyncio.Lock()
-            instance.base_url = f'http://localhost:818{8+i}'
+            instance.base_url = f'http://localhost:818{8 + i}'
             instance.get_session = AsyncMock(return_value=mock_session)
             instances.append(instance)
 
@@ -218,13 +223,15 @@ class TestComfyUIClient:
         messages = [
             {'type': 'progress', 'data': {'prompt_id': 'test_prompt', 'node': 'test_node', 'value': 50, 'max': 100}},
             {'type': 'executing', 'data': {'prompt_id': 'test_prompt', 'node': 'test_node'}},
-            {'type': 'executed', 'data': {'prompt_id': 'test_prompt', 'output': {'images': [{'filename': 'test.png', 'type': 'output'}]}}},
+            {'type': 'executed',
+             'data': {'prompt_id': 'test_prompt', 'output': {'images': [{'filename': 'test.png', 'type': 'output'}]}}},
             {'type': 'executing', 'data': {'prompt_id': 'test_prompt', 'node': None}}
         ]
 
         mock_ws.recv = AsyncMock(side_effect=[json.dumps(msg) for msg in messages])
 
         received_messages = []
+
         async def callback(status, image=None):
             received_messages.append((status, image))
 
@@ -290,6 +297,7 @@ class TestComfyUIClient:
         mock_ws.recv = AsyncMock(return_value=error_message)
 
         received_messages = []
+
         async def callback(status, image=None):
             received_messages.append(status)
 
@@ -325,8 +333,10 @@ class TestComfyUIClient:
             class MockContextManager:
                 async def __aenter__(self):
                     return mock_response
+
                 async def __aexit__(self, *args):
                     pass
+
             mock_session.get.return_value = MockContextManager()
 
             # Create instance
@@ -392,8 +402,10 @@ class TestComfyUIClient:
             class MockContextManager:
                 async def __aenter__(self):
                     return mock_response
+
                 async def __aexit__(self, *args):
                     pass
+
             mock_session.get.return_value = MockContextManager()
 
             # Create instance without auth
@@ -453,8 +465,10 @@ class TestComfyUIClient:
                 class MockContextManager:
                     async def __aenter__(self):
                         return mock_response
+
                     async def __aexit__(self, *args):
                         pass
+
                 mock_session.get.return_value = MockContextManager()
 
                 # Create instance
@@ -486,7 +500,6 @@ class TestComfyUIClient:
         with patch('ssl.create_default_context', return_value=mock_ssl_context) as mock_ssl, \
                 patch('aiohttp.ClientSession') as mock_session_class, \
                 patch('aiohttp.TCPConnector') as mock_connector_class:
-
             # Create mock connector
             mock_connector = Mock()
             mock_connector_class.return_value = mock_connector
@@ -503,8 +516,10 @@ class TestComfyUIClient:
             class MockContextManager:
                 async def __aenter__(self):
                     return mock_response
+
                 async def __aexit__(self, *args):
                     pass
+
             mock_session.get.return_value = MockContextManager()
 
             # Create instance with cert path
@@ -534,7 +549,6 @@ class TestComfyUIClient:
         """Test instance without SSL"""
         with patch('aiohttp.ClientSession') as mock_session_class, \
                 patch('aiohttp.TCPConnector') as mock_connector_class:
-
             # Create mock connector
             mock_connector = Mock()
             mock_connector_class.return_value = mock_connector
@@ -565,7 +579,7 @@ class TestComfyUIClient:
         instance._lock = asyncio.Lock()
         instance.base_url = f'http://localhost:8188'
         instance.get_session = AsyncMock(return_value=mock_session)
-        instance.is_timed_out = lambda : True
+        instance.is_timed_out = lambda: True
         instance.active_prompts = set()
         instances.append(instance)
 
@@ -588,7 +602,7 @@ class TestComfyUIClient:
         instance._lock = asyncio.Lock()
         instance.base_url = f'http://localhost:8188'
         instance.get_session = AsyncMock(return_value=mock_session)
-        instance.is_timed_out = lambda : True
+        instance.is_timed_out = lambda: True
         instance.active_prompts = set()
         instances.append(instance)
 
@@ -602,3 +616,113 @@ class TestComfyUIClient:
         await asyncio.sleep(0.1)
 
         hook_manager.execute_hook.assert_awaited_with('is.comfyui.client.instance.reconnect', instances[0].base_url)
+
+
+class TestComfyUIClientImageUpload:
+    @pytest.fixture
+    def mock_response(self):
+        response = AsyncMock()
+        response.status = 200
+        response.text = AsyncMock(return_value="Success")
+        response.json = AsyncMock(return_value={'url': 'http://test.com/image.png'})
+        return response
+
+    @pytest.fixture
+    def mock_session(self, mock_response):
+        session = AsyncMock()
+        session.post = MockPost(mock_response)
+        session.get = MockPost(mock_response)
+        return session
+
+    @pytest.fixture
+    def mock_instance(self, mock_session):
+        instance = AsyncMock()
+        instance.client_id = 'test_id'
+        instance.connected = True
+        instance._lock = asyncio.Lock()
+        instance.base_url = 'http://localhost:8188'
+        instance.get_session.return_value = mock_session
+        return instance
+
+    @pytest.mark.asyncio
+    async def test_upload_image_success(self, mock_instance):
+        """Test successful image upload"""
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        client._get_instance = AsyncMock(return_value=mock_instance)
+
+        image_data = b"fake_image_data"
+        result = await client.upload_image(image_data)
+
+        # Verify result
+        assert result == {'url': 'http://test.com/image.png'}
+
+        # Verify session usage
+        session = await mock_instance.get_session()
+        assert session.post.args is not None
+
+        # Verify mark_used was called
+        mock_instance.mark_used.assert_called_once()
+
+        # Verify request was made correctly
+        expected_url = f"{mock_instance.base_url}/api/upload/image"
+        assert session.post.args[0] == expected_url
+        assert isinstance(session.post.kwargs['data'], aiohttp.FormData)
+
+    @pytest.mark.asyncio
+    async def test_upload_image_failure(self, mock_instance, mock_session):
+        """Test failed image upload"""
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        client._get_instance = AsyncMock(return_value=mock_instance)
+
+        # Create error response
+        error_response = AsyncMock()
+        error_response.status = 400
+        error_response.text = AsyncMock(return_value="Bad request")
+        mock_session.post = MockPost(error_response)
+
+        image_data = b"fake_image_data"
+
+        with pytest.raises(Exception) as exc_info:
+            await client.upload_image(image_data)
+
+        assert "Image upload failed with status 400" in str(exc_info.value)
+        mock_instance.mark_used.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_upload_image_network_error(self, mock_instance):
+        """Test network error during image upload"""
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        client._get_instance = AsyncMock(return_value=mock_instance)
+
+        # Create a session that raises an error on post
+        error_session = AsyncMock()
+        error = aiohttp.ClientError("Network error")
+        error_session.post = MockPost(error)
+
+        # Make sure get_session returns our error session
+        mock_instance.get_session.return_value = error_session
+
+        image_data = b"fake_image_data"
+
+        with pytest.raises(aiohttp.ClientError) as exc_info:
+            await client.upload_image(image_data)
+
+        assert "Network error" in str(exc_info.value)
+        mock_instance.mark_used.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_upload_image_lock_usage(self, mock_instance):
+        """Test that the lock is properly acquired and released during upload"""
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        client._get_instance = AsyncMock(return_value=mock_instance)
+
+        # Create a proper mock for the lock
+        mock_lock = AsyncMock()
+        mock_instance._lock = mock_lock
+
+        image_data = b"fake_image_data"
+        await client.upload_image(image_data)
+
+        # Verify lock was used correctly
+        mock_lock.__aenter__.assert_called_once()
+        mock_lock.__aexit__.assert_called_once()

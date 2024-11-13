@@ -307,6 +307,30 @@ class ComfyUIClient:
             finally:
                 instance.active_generations -= 1
 
+    async def upload_image(self, image_data: bytes) -> str:
+        instance = await self._get_instance()
+
+        async with instance._lock:
+            try:
+                session = await instance.get_session()
+
+                data = aiohttp.FormData()
+                data.add_field('image', io.BytesIO(image_data))
+
+                async with session.post(
+                        f"{instance.base_url}/api/upload/image",
+                        data=data,
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"Image upload failed with status {response.status}: {error_text}")
+
+                    result = await response.json()
+                    return result
+
+            finally:
+                await instance.mark_used()
+
     async def _test_image_access(self, url: str) -> bool:
         """Test if an image URL is accessible"""
         if self.session is None:

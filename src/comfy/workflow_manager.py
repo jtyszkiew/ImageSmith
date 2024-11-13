@@ -27,7 +27,7 @@ class WorkflowManager:
         logger.info(f"Using ComfyUI input directory: {self.input_dir}")
 
     def update_workflow_nodes(self, workflow_json: dict, workflow_config: dict,
-                              prompt: str = None, image_data: bytes = None) -> dict:
+                              prompt: str = None, image: dict = None) -> dict:
         """Update workflow nodes with prompt and/or image data"""
         modified_workflow = workflow_json.copy()
 
@@ -41,36 +41,23 @@ class WorkflowManager:
                     logger.debug(f"Updated prompt in node {node_id}: {prompt}")
 
         # Update image if provided and node is configured
-        if image_data and 'image_input_node_id' in workflow_config:
+        if image and 'image_input_node_id' in workflow_config:
             try:
                 node_id = str(workflow_config['image_input_node_id'])
                 if node_id not in modified_workflow:
                     raise ValueError(f"Node ID {node_id} not found in workflow")
 
-                # Create a unique filename
-                filename = f"input_{uuid.uuid4()}.png"
-                file_path = self.input_dir / filename
-
-                # Save the image
-                file_path.write_bytes(image_data)
-                logger.debug(f"Saved input image to: {file_path}")
-
                 # Update node with image path
                 node = modified_workflow[node_id]
                 if 'inputs' in node and 'image' in node['inputs']:
                     # Just use the filename for ComfyUI
-                    node['inputs']['image'] = filename
-                    logger.debug(f"Updated image in node {node_id} with filename: {filename}")
+                    node['inputs']['image'] = image['name']
+                    logger.debug(f"Updated image in node {node_id} with filename: {image['name']}")
                 else:
                     raise ValueError(f"Node {node_id} does not have 'image' input")
 
             except Exception as e:
                 logger.error(f"Error updating image node: {e}")
-                if file_path.exists():
-                    try:
-                        file_path.unlink()  # Clean up the file if there was an error
-                    except:
-                        pass
                 raise ValueError(f"Failed to process input image: {str(e)}")
 
         return modified_workflow
@@ -187,7 +174,7 @@ class WorkflowManager:
 
     def prepare_workflow(self, workflow_name: str, prompt: str = None,
                          settings: Optional[str] = None,
-                         image_data: Optional[bytes] = None) -> dict:
+                         image: Optional[dict] = None) -> dict:
         """Prepare a workflow with prompt, settings, and image data"""
         try:
             workflow_config = self.get_workflow(workflow_name)
@@ -202,7 +189,7 @@ class WorkflowManager:
                 workflow_json,
                 workflow_config,
                 prompt,
-                image_data
+                image
             )
 
             # Apply settings

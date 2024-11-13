@@ -264,9 +264,9 @@ class ComfyUIBot(commands.Bot):
             await interaction.response.send_message(embed=embed)
             message = await interaction.original_response()
 
-            image_data = None
+            image = None
             if input_image:
-                image_data = await input_image.read()
+                image = await self.comfy_client.upload_image(await input_image.read())
 
             async def run_generation():
                 try:
@@ -274,7 +274,7 @@ class ComfyUIBot(commands.Bot):
                         workflow_name,
                         prompt,
                         settings,
-                        image_data
+                        image
                     )
 
                     result = await self.comfy_client.generate(workflow_json)
