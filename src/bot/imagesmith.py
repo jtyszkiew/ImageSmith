@@ -46,9 +46,11 @@ class ComfyUIBot(commands.Bot):
         await self.load_plugins()
 
         try:
-            await self.hook_manager.execute_hook('is.comfyui.client.before_create', self.workflow_manager.config['comfyui']['instances'])
+            await self.hook_manager.execute_hook('is.comfyui.client.before_create',
+                                                 self.workflow_manager.config['comfyui']['instances'])
             self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['instances'], self.hook_manager)
-            await self.hook_manager.execute_hook('is.comfyui.client.after_create', self.workflow_manager.config['comfyui']['instances'])
+            await self.hook_manager.execute_hook('is.comfyui.client.after_create',
+                                                 self.workflow_manager.config['comfyui']['instances'])
 
             await self.comfy_client.connect()
             logger.info("Connected to ComfyUI")
@@ -186,7 +188,9 @@ class ComfyUIBot(commands.Bot):
                                 input_image: Optional[discord.Attachment] = None):
         """Handle image generation for all command types"""
         try:
-            workflow_name = workflow or self.workflow_manager.get_default_workflow(workflow_type)
+            workflow_name = workflow or self.workflow_manager.get_default_workflow(workflow_type,
+                                                                                   channel_name=interaction.channel.name,
+                                                                                   user_name=interaction.user.name)
             workflow_config = self.workflow_manager.get_workflow(workflow_name)
 
             await self.hook_manager.execute_hook('is.security.before', interaction, workflow_name, workflow_type,
@@ -319,4 +323,3 @@ class ComfyUIBot(commands.Bot):
                     )
                 )
             raise
-

@@ -1,7 +1,6 @@
 import pytest
-import discord
 import yaml
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock, patch
 
 from src.bot.imagesmith import ComfyUIBot, SecurityResult
 
@@ -31,8 +30,7 @@ class TestComfyUIBot:
     @pytest.fixture
     async def bot(self, mock_config, tmp_path):
         """Create a bot instance with mocked parent class and dependencies"""
-        with patch('src.comfy.workflow_manager.WorkflowManager._load_config') as mock_wm, \
-                patch('src.comfy.workflow_manager.WorkflowManager.get_default_workflow') as mock_get_default_workflow:
+        with patch('src.comfy.workflow_manager.WorkflowManager._load_config') as mock_wm:
             mock_wm.return_value = {
                 'comfyui': {
                     'instances': [{
@@ -47,7 +45,7 @@ class TestComfyUIBot:
                     }
                 }
             }
-            mock_get_default_workflow.return_value = "test_workflow"
+            # mock_get_default_workflow.return_value = "test_workflow"
 
             # Create bot instance
             bot = ComfyUIBot(plugins_path=f"{tmp_path}/plugins")
@@ -252,6 +250,7 @@ class TestPlugin(Plugin):
 
         await bot.handle_generation(
             interaction=interaction,
+            workflow='test_workflow',
             workflow_type='img2img',  # Mismatched type
             prompt="test prompt"
         )

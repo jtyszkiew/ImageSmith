@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 import json
 from src.comfy.workflow_manager import WorkflowManager
@@ -47,19 +49,34 @@ def hd(workflowjson):
                     'workflow': str(sample_workflow_json),
                     'text_prompt_node_id': '6',
                     'image_input_node_id': '7'
-                }
+                },
+                'test_txt2img_channel': {
+                    'type': 'txt2img',
+                    'description': 'test txt2img channel workflow',
+                    'workflow': str(sample_workflow_json),
+                    'text_prompt_node_id': '6',
+                    'default_for': {
+                        'channels': ['test_channel']
+                    },
+                },
+                'test_txt2img_user': {
+                    'type': 'txt2img',
+                    'description': 'test txt2img user workflow',
+                    'workflow': str(sample_workflow_json),
+                    'text_prompt_node_id': '6',
+                    'default_for': {
+                        'users': ['test_user']
+                    },
+                },
             }
         }
         return config_data
 
     @pytest.fixture
     def workflow_manager(self, config_yaml):
-        wm = WorkflowManager('tests/tests_configuration.yml')
-
-        wm.config = config_yaml
-        wm.workflows = config_yaml['workflows']
-
-        return wm
+        with patch('src.comfy.workflow_manager.WorkflowManager._load_config') as mock_load:
+            mock_load.return_value = config_yaml
+            return WorkflowManager('')
 
     def test_init(self, workflow_manager, config_yaml):
         assert workflow_manager.config is not None
@@ -79,11 +96,11 @@ def hd(workflowjson):
     def test_get_selectable_workflows(self, workflow_manager):
         # Test getting all workflows
         workflows = workflow_manager.get_selectable_workflows()
-        assert len(workflows) == 2
+        assert len(workflows) == 4
 
         # Test getting specific type
         txt2img_workflows = workflow_manager.get_selectable_workflows('txt2img')
-        assert len(txt2img_workflows) == 1
+        assert len(txt2img_workflows) == 3
         assert list(txt2img_workflows.keys())[0] == 'test_txt2img'
 
     def test_load_workflow_file(self, workflow_manager, sample_workflow_json):
@@ -130,3 +147,15 @@ def hd(workflowjson):
         assert workflow["6"]["inputs"]["text"] == "test prompt"
         assert workflow["5"]["inputs"]["width"] == 1280
         assert workflow["5"]["inputs"]["height"] == 720
+
+    @pytest.mark.asyncio
+    def test_get_default_workflow_for_channel(self, workflow_manager):
+        workflow = workflow_manager.get_default_workflow('txt2img', channel_name='test_channel')
+        print("Returned workflow:", workflow)
+        assert workflow == 'test_txt2img_channel'
+
+    @pytest.mark.asyncio
+    def test_get_default_workflow_for_user(self, workflow_manager):
+        workflow = workflow_manager.get_default_workflow('txt2img', user_name='test_user')
+
+        assert workflow == 'test_txt2img_user'

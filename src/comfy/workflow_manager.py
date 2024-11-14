@@ -1,5 +1,4 @@
 import json
-import uuid
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -82,15 +81,34 @@ class WorkflowManager:
 
         return workflows
 
-    def get_default_workflow(self, workflow_type: str) -> str:
+    def get_default_workflow(self, workflow_type: str, channel_name: str = None, user_name: str = None) -> str:
         """Get default workflow for the specified type"""
         for name, workflow in self.workflows.items():
-            if workflow.get('type', 'txt2img') == workflow_type and workflow.get('default', False):
-                return name
+            if not channel_name and not user_name:
+                if workflow.get('type', 'txt2img') == workflow_type and workflow.get('default', False):
+                    return name
+
+            default_for = workflow.get('default_for', {})
+
+            if channel_name:
+                default_for_channels = default_for.get('channels', [])
+
+                # Check if workflow is default for this channel
+                if workflow.get('type', 'txt2img') == workflow_type and channel_name in default_for_channels:
+                    return name
+
+            if user_name:
+                default_for_users = default_for.get('users', [])
+
+                # Check if workflow is default for this user
+                if workflow.get('type', 'txt2img') == workflow_type and user_name in default_for_users:
+                    return name
+
         # Return first workflow of the specified type if no default is set
         for name, workflow in self.workflows.items():
             if workflow.get('type', 'txt2img') == workflow_type:
                 return name
+
         return None
 
     def load_workflow_file(self, workflow_path: str) -> dict:
