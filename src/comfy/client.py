@@ -394,6 +394,8 @@ class ComfyUIClient:
                     msg_type = data.get('type')
                     msg_data = data.get('data', {})
 
+                    print(msg_data)
+
                     if msg_data.get('prompt_id') != prompt_id:
                         continue
 
