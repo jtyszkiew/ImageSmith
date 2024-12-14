@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import pytest
 import asyncio
 import sys
@@ -23,3 +25,16 @@ def setup_test_event_loop(event_loop):
     """Fixture to automatically set up the event loop for all async tests."""
     asyncio.set_event_loop(event_loop)
     return event_loop
+
+@pytest.fixture
+def mock_discord_components():
+    class MockComponent(MagicMock):
+        pass
+
+    return {
+        'Button': MockComponent,
+        'TextInput': MockComponent,
+        'Select': MockComponent,
+        'View': MockComponent,
+        'Modal': MockComponent
+    }

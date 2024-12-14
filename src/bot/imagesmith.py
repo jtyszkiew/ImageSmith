@@ -11,6 +11,7 @@ from discord.ext import commands
 from logger import logger
 from .commands import forge_command, reforge_command, upscale_command, workflows_command
 from ..comfy.workflow_manager import WorkflowManager
+from ..core.form import DynamicFormManager
 from ..core.hook_manager import HookManager
 from ..core.generation_queue import GenerationQueue
 from ..comfy.client import ComfyUIClient
@@ -89,7 +90,7 @@ class ComfyUIBot(commands.Bot):
             add_reactions=True,
             read_message_history=True,
         )
-
+        
         invite_link = discord.utils.oauth_url(
             self.user.id,
             permissions=permissions,
@@ -193,6 +194,9 @@ class ComfyUIBot(commands.Bot):
                                                                                    user_name=interaction.user.name)
             workflow_config = self.workflow_manager.get_workflow(workflow_name)
 
+            if not hasattr(self, 'form_manager'):
+                self.form_manager = DynamicFormManager()
+
             await self.hook_manager.execute_hook('is.security.before', interaction, workflow_name, workflow_type,
                                                  prompt, workflow_config, settings)
 
@@ -281,6 +285,17 @@ class ComfyUIBot(commands.Bot):
                         image
                     )
 
+                    workflow_json = self.workflow_manager.prepare_workflow(workflow_name, prompt, settings, image)
+                    modified_workflow_json = await self.form_manager.process_workflow_form(
+                        interaction,
+                        workflow_config,
+                        workflow_json,
+                        message,
+                    )
+
+                    if modified_workflow_json is None:
+                        return  # Form processing failed or timed out
+
                     result = await self.comfy_client.generate(workflow_json)
                     if 'error' in result:
                         raise Exception(result['error'])
@@ -305,6 +320,7 @@ class ComfyUIBot(commands.Bot):
                     await self.comfy_client.listen_for_updates(prompt_id, update_message)
 
                 except Exception as e:
+                    logger.error(e, exc_info=True)
                     error_embed = discord.Embed(title="🔨 ImageSmith Forge", color=0xFF0000)
                     error_embed.add_field(name="Status", value=f"❌ Error: {str(e)}", inline=False)
                     error_embed.add_field(name="Creator", value=interaction.user.mention, inline=True)
