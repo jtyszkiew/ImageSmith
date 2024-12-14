@@ -90,7 +90,7 @@ class ComfyUIBot(commands.Bot):
             add_reactions=True,
             read_message_history=True,
         )
-
+        
         invite_link = discord.utils.oauth_url(
             self.user.id,
             permissions=permissions,

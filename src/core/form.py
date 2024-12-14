@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Set, overload, override
+from typing import Any, Dict, List, Optional, Set
 import discord
 from discord import ui
+
+from logger import logger
 
 
 @dataclass
@@ -95,7 +97,7 @@ class FormFieldHandler(ABC):
         pass
 
     @abstractmethod
-    async def process_value(self, interaction: discord.Interaction, value: Any) -> Any:
+    async def process_value(self, value: Any) -> Any:
         """Process and validate the value from the component"""
         pass
 
@@ -115,7 +117,7 @@ class TextFieldHandler(FormFieldHandler):
             custom_id=f"form_field_{field.name}"
         )
 
-    async def process_value(self, interaction: discord.Interaction, value: str) -> int:
+    async def process_value(self, value: str) -> int:
         try:
             return int(value)
         except ValueError:
@@ -123,8 +125,6 @@ class TextFieldHandler(FormFieldHandler):
 
     def requires_modal(self) -> bool:
         return True
-
-
 
 
 class SelectFieldHandler(FormFieldHandler):
@@ -145,7 +145,7 @@ class SelectFieldHandler(FormFieldHandler):
             custom_id=f"form_field_{field.name}"
         )
 
-    async def process_value(self, interaction: discord.Interaction, values: List[str]) -> List[str]:
+    async def process_value(self, values: List[str]) -> List[str]:
         return values
 
     def requires_modal(self) -> bool:
@@ -157,7 +157,7 @@ class ResolutionFieldHandler(SelectFieldHandler):
     def __init__(self):
         super().__init__(max_values=1)
 
-    async def process_value(self, interaction: discord.Interaction, values: List[str]) -> List[str]:
+    async def process_value(self, values: List[str]) -> List[int]:
         if not values:
             raise ValueError("No resolution value provided")
 
@@ -180,7 +180,7 @@ class ResolutionFieldHandler(SelectFieldHandler):
             if width > max_dimension or height > max_dimension:
                 raise ValueError(f"Dimensions cannot exceed {max_dimension}px")
 
-            return [str(width), str(height)]
+            return [int(width), int(height)]
 
         except ValueError as e:
             # Re-raise with more specific message if it's our custom error
@@ -208,16 +208,28 @@ class FormModal(ui.Modal):
             return
 
         try:
-            value = interaction.data['components'][0]['components'][0]['value']
-            processed_value = await self.handler.process_value(interaction, value)
+            # Get the raw value from the first component
+            raw_value = interaction.data['components'][0]['components'][0]['value']
 
+            # Process the value using the handler's process_value method
+            processed_value = await self.handler.process_value(raw_value)
+
+            # Initialize form_data if it doesn't exist
             if not hasattr(interaction.client, 'form_data'):
                 interaction.client.form_data = {}
+
+            # Store the processed value
             interaction.client.form_data[self.field.name] = processed_value
             self.completed_fields.add(self.field.name)
 
+            # Format the response message based on the value type
+            response_value = (
+                f"{', '.join(processed_value)}" if isinstance(processed_value, (list, tuple))
+                else str(processed_value)
+            )
+
             await interaction.response.send_message(
-                f"Received {self.field.name}: {processed_value}",
+                f"Received {self.field.name}: {response_value}",
                 ephemeral=True
             )
         except Exception as e:
@@ -286,6 +298,7 @@ class FormView(ui.View):
 
                 if not hasattr(interaction.client, 'form_data'):
                     interaction.client.form_data = {}
+
                 interaction.client.form_data[field_name] = values
                 self.completed_fields.add(field_name)
 
@@ -328,6 +341,7 @@ class DynamicFormManager:
 
         if not hasattr(interaction.client, 'form_data'):
             interaction.client.form_data = {}
+
         interaction.client.form_data['workflow_json'] = workflow_json
         interaction.client.form_data['field_definitions'] = form_definition.fields
 
@@ -391,9 +405,9 @@ class DynamicFormManager:
                 break
         await message.edit(embed=embed, view=None)
 
-        return self.apply_form_data_to_workflow(interaction.client.form_data, workflow_json)
+        return await self.apply_form_data_to_workflow(interaction.client.form_data, workflow_json)
 
-    def apply_form_data_to_workflow(self, form_data: dict, workflow_json: dict) -> dict:
+    async def apply_form_data_to_workflow(self, form_data: dict, workflow_json: dict) -> dict:
         """Apply the collected form data to the workflow JSON"""
         modified_json = workflow_json.copy()
 
@@ -414,21 +428,20 @@ class DynamicFormManager:
 
                 # Execute the on_submit code
                 local_vars = {'workflowjson': modified_json}
-                if isinstance(value, tuple):
-                    local_vars['width'] = value[0]
-                    local_vars['height'] = value[1]
-                else:
-                    local_vars['value'] = value
+                local_vars['value'] = value
 
                 exec(field_def.on_submit, {}, local_vars)
 
                 # Get and call the on_submit function
                 on_submit = local_vars.get('on_submit')
                 if on_submit:
-                    if isinstance(value, tuple):
-                        on_submit(modified_json, value[0], value[1])
-                    else:
-                        on_submit(modified_json, value)
+                    try:
+                        handler = self.field_handlers.get(field_def.type)
+                        on_submit(modified_json, await handler.process_value(value))
+                    except Exception as e:
+                        logger.error(f"Error executing on_submit for field: {field_name}, error: {e}", exc_info=True)
+
+                        raise e
 
             elif not field_def.required and field_def.on_default:
                 # Field wasn't filled in but has a default handler

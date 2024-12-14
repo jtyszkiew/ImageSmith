@@ -1,8 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import discord
-from datetime import datetime
-from typing import Dict
 
 from src.core.form import (
     FormField,
@@ -10,10 +8,6 @@ from src.core.form import (
     FormFieldHandler,
     TextFieldHandler,
     ResolutionFieldHandler,
-    SelectFieldHandler,
-    FormModal,
-    FormButton,
-    FormView,
     DynamicFormManager
 )
 
@@ -45,9 +39,9 @@ def on_default(workflowjson):
                 'description': 'Resolution for the image',
                 'message': 'Provide the resolution',
                 'on_submit': '''
-def on_submit(workflowjson, width, height):
-    workflowjson["5"]["inputs"]["width"] = width
-    workflowjson["5"]["inputs"]["height"] = height
+def on_submit(workflowjson, value):
+    workflowjson["5"]["inputs"]["width"] = value[0]
+    workflowjson["5"]["inputs"]["height"] = value[1]
 '''
             }
         ]
@@ -141,27 +135,27 @@ class TestNumberFieldHandler:
     @pytest.mark.asyncio
     async def test_process_value_valid(self):
         handler = TextFieldHandler()
-        result = await handler.process_value(MagicMock(), "123")
+        result = await handler.process_value("123")
         assert result == 123
 
     @pytest.mark.asyncio
     async def test_process_value_invalid(self):
         handler = TextFieldHandler()
         with pytest.raises(ValueError):
-            await handler.process_value(MagicMock(), "invalid")
+            await handler.process_value("invalid")
 
 class TestResolutionFieldHandler:
     @pytest.mark.asyncio
     async def test_process_value_valid(self):
         handler = ResolutionFieldHandler()
-        result = await handler.process_value(MagicMock(), ["512x512", "1024x1024"])
-        assert result == ['512', '512']
+        result = await handler.process_value(["512x512", "1024x1024"])
+        assert result == [512, 512]
 
     @pytest.mark.asyncio
     async def test_process_value_invalid(self):
         handler = ResolutionFieldHandler()
         with pytest.raises(ValueError):
-            await handler.process_value(MagicMock(), "invalid")
+            await handler.process_value("invalid")
 
 class TestDynamicFormManager:
     @pytest.fixture
@@ -196,7 +190,9 @@ def on_submit(workflowjson, value):
             'seed': 42
         }
 
-        result = form_manager.apply_form_data_to_workflow(form_data, sample_workflow_json)
+        form_manager.register_field_handler('number', TextFieldHandler())
+
+        result = await form_manager.apply_form_data_to_workflow(form_data, sample_workflow_json)
         assert result["65"]["inputs"]["seed"] == 42
 
     @pytest.mark.asyncio
@@ -217,7 +213,7 @@ def on_default(workflowjson):
             ]
         }
 
-        result = form_manager.apply_form_data_to_workflow(form_data, sample_workflow_json)
+        result = await form_manager.apply_form_data_to_workflow(form_data, sample_workflow_json)
         assert result["65"]["inputs"]["seed"] == 999
 
     @pytest.mark.asyncio
@@ -280,7 +276,7 @@ def on_default(workflowjson):
                 if not hasattr(mock_int.client, 'form_data'):
                     mock_int.client.form_data = {}
                 mock_int.client.form_data['field_definitions'] = sample_workflow_config['form']
-                mock_int.client.form_data['resolution'] = (1024, 1024)
+                mock_int.client.form_data['resolution'] = ["1024x1024"]
             elif submission_count == 2:
                 # Third interaction: Form submission
                 mock_int.data = {
