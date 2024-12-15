@@ -1,7 +1,9 @@
+import io
 import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
+from PIL import Image
 import yaml
 
 from logger import logger
@@ -9,6 +11,7 @@ from logger import logger
 
 class WorkflowManager:
     """Manages ComfyUI workflows and their configurations"""
+
     def __init__(self, config_path: str):
         self.config = self._load_config(config_path)
         self.workflows = self.config['workflows']
@@ -116,7 +119,7 @@ class WorkflowManager:
         with open(workflow_path, 'r') as f:
             return json.load(f)
 
-    def _apply_setting(self, workflow_json: dict, setting_name: str, setting_def: dict, params: list[str] = None):
+    def _apply_setting(self, workflow_json: dict, setting_name: str, setting_def: dict, params: list[Any] = None):
         """Apply a single setting to the workflow"""
         try:
             if 'code' in setting_def:
@@ -129,7 +132,7 @@ class WorkflowManager:
                     locals()[setting_name](workflow_json)
                 logger.debug(f"Applied setting: {setting_name}")
         except Exception as e:
-            logger.error(f"Error applying setting {setting_name}: {e}")
+            logger.error(f"Error applying setting {setting_name}: {e}", exc_info=True)
 
     def _find_setting_def(self, workflow: dict, setting_name: str) -> Optional[dict]:
         """Find setting definition in workflow settings"""
@@ -141,7 +144,7 @@ class WorkflowManager:
                 return setting_def
         return None
 
-    def apply_settings(self, workflow_json: dict, workflow_config: dict, settings_str: str = None) -> dict:
+    def apply_settings(self, workflow_json: dict, workflow_config: dict, settings_str: str = None, image: Image = None) -> dict:
         """Apply settings to a workflow including __before and __after"""
         workflow = workflow_config
 
@@ -153,7 +156,10 @@ class WorkflowManager:
             before_setting = self._find_setting_def(workflow, '__before')
             if before_setting:
                 logger.debug("Applying __before settings...")
-                self._apply_setting(workflow_json, '__before', before_setting)
+                if image:
+                    self._apply_setting(workflow_json, '__before', before_setting, [image])
+                else:
+                    self._apply_setting(workflow_json, '__before', before_setting)
 
             # Apply custom settings if provided
             if settings_str:
@@ -192,7 +198,8 @@ class WorkflowManager:
 
     def prepare_workflow(self, workflow_name: str, prompt: str = None,
                          settings: Optional[str] = None,
-                         image: Optional[dict] = None) -> dict:
+                         image: Optional[dict] = None,
+                         input_image: Optional[Image.Image] = None) -> dict:
         """Prepare a workflow with prompt, settings, and image data"""
         try:
             workflow_config = self.get_workflow(workflow_name)
@@ -211,7 +218,7 @@ class WorkflowManager:
             )
 
             # Apply settings
-            workflow_json = self.apply_settings(workflow_json, workflow_config, settings)
+            workflow_json = self.apply_settings(workflow_json, workflow_config, settings, input_image)
 
             return workflow_json
         except Exception as e:

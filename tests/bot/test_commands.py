@@ -93,4 +93,4 @@ class TestImageCommands:
         # Extract the embed from the send_message call arguments
         embed = mock_interaction.response.send_message.call_args[1]['embed']
         assert isinstance(embed, discord.Embed)
-        assert "workflow1" in embed.fields[0].name
+        assert "workflow1" in embed.fields[0].value

@@ -1,9 +1,11 @@
 import importlib
 import inspect
+import io
 import sys
 
 from pathlib import Path
 from typing import Optional
+from PIL import Image
 
 import discord
 from discord.ext import commands
@@ -90,7 +92,7 @@ class ComfyUIBot(commands.Bot):
             add_reactions=True,
             read_message_history=True,
         )
-        
+
         invite_link = discord.utils.oauth_url(
             self.user.id,
             permissions=permissions,
@@ -273,8 +275,10 @@ class ComfyUIBot(commands.Bot):
             message = await interaction.original_response()
 
             image = None
+            input_image_file = None
             if input_image:
-                image = await self.comfy_client.upload_image(await input_image.read())
+                input_image_file = await input_image.read()
+                image = await self.comfy_client.upload_image(input_image_file)
 
             async def run_generation():
                 try:
@@ -282,10 +286,9 @@ class ComfyUIBot(commands.Bot):
                         workflow_name,
                         prompt,
                         settings,
-                        image
+                        image,
+                        Image.open(io.BytesIO(input_image_file)) if input_image_file else None,
                     )
-
-                    workflow_json = self.workflow_manager.prepare_workflow(workflow_name, prompt, settings, image)
                     modified_workflow_json = await self.form_manager.process_workflow_form(
                         interaction,
                         workflow_config,
