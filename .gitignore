@@ -38,5 +38,5 @@ logs/
 .coverage
 htmlcov/
 
-/plugins_
-!/plugins_/__init__.py
+/plugins
+!/plugins/__init__.py
