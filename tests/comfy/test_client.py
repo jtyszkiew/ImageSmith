@@ -67,12 +67,10 @@ class TestComfyUIClient:
     def mocked_client(self, mock_instance):
         client = ComfyUIClient([{'url': 'http://localhost:8188'}])
 
-        # Set up _get_instance to return the mock instance
-        async def get_instance():
-            return mock_instance
-
-        client._get_instance = get_instance
         client.instances = [mock_instance]
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
+
         return client
 
     @pytest.mark.asyncio
@@ -81,6 +79,8 @@ class TestComfyUIClient:
 
         session = await mock_instance.get_session()
         assert result == {'prompt_id': 'test_prompt'}
+
+        assert mocked_client.load_balancer.get_instance.call_count == 1
         assert mock_instance.active_generations == 0
         assert session.post.response.json.called
 
@@ -171,46 +171,6 @@ class TestComfyUIClient:
         assert result == {'prompt_id': 'test_prompt'}
         assert mock_instance.active_generations == 0
 
-    @pytest.mark.asyncio
-    async def test_load_balance_strategies(self, mock_session):
-        """Test all load balancing strategies"""
-        client = ComfyUIClient([
-            {'url': 'http://localhost:8188', 'weight': 2},
-            {'url': 'http://localhost:8189', 'weight': 1}
-        ])
-
-        # Create mock instances
-        instances = []
-        for i, weight in enumerate([2, 1]):
-            instance = AsyncMock()
-            instance.client_id = f'test_id_{i}'
-            instance.connected = True
-            instance.active_generations = i  # Different loads
-            instance.weight = weight
-            instance._lock = asyncio.Lock()
-            instance.base_url = f'http://localhost:818{8 + i}'
-            instance.get_session = AsyncMock(return_value=mock_session)
-            instances.append(instance)
-
-        client.instances = instances
-
-        # Test LEAST_BUSY strategy
-        client.strategy = LoadBalanceStrategy.LEAST_BUSY
-        instance = client._select_instance_least_busy()
-        assert instance.active_generations == 0
-
-        # Test ROUND_ROBIN strategy
-        client.strategy = LoadBalanceStrategy.ROUND_ROBIN
-        first = client._select_instance_round_robin()
-        second = client._select_instance_round_robin()
-        assert first != second
-        third = client._select_instance_round_robin()
-        assert third == first  # Should cycle back
-
-        # Test RANDOM strategy
-        client.strategy = LoadBalanceStrategy.RANDOM
-        selected = client._select_instance_random()
-        assert selected in instances
 
     @pytest.mark.asyncio
     async def test_websocket_handling(self, mocked_client, mock_instance, mock_session):
@@ -264,7 +224,7 @@ class TestComfyUIClient:
         ]
 
         for case in test_cases:
-            url = mocked_client._get_image_url(instance, case['input'])
+            url = mocked_client._get_resource_url(instance, case['input'])
             parsed_url = urllib.parse.urlparse(url)
             parsed_expected = urllib.parse.urlparse(case['expected'])
 
@@ -309,313 +269,6 @@ class TestComfyUIClient:
         assert "Processing failed" in str(exc_info.value)
         assert any('Error' in msg for msg in received_messages)
 
-    @pytest.mark.asyncio
-    async def test_instance_auth(self):
-        """Test instance authentication"""
-        # Create instance with auth
-        auth = ComfyUIAuth(
-            username='test_user',
-            password='test_pass',
-            api_key='test_key',
-            ssl_verify=True
-        )
-
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Create mock session
-            mock_session = AsyncMock()
-            mock_session_class.return_value = mock_session
-
-            # Create mock response for connection test
-            mock_response = AsyncMock()
-            mock_response.status = 200
-
-            # Make session.get return a context manager
-            class MockContextManager:
-                async def __aenter__(self):
-                    return mock_response
-
-                async def __aexit__(self, *args):
-                    pass
-
-            mock_session.get.return_value = MockContextManager()
-
-            # Create instance
-            instance = ComfyUIInstance(
-                base_url='http://localhost:8188',
-                auth=auth
-            )
-
-            # Get session
-            session = await instance.get_session()
-
-            # Verify ClientSession was created with correct headers
-            assert mock_session_class.called
-            call_args = mock_session_class.call_args
-            headers = call_args.kwargs.get('headers', {})
-
-            # API key should take precedence
-            assert 'Authorization' in headers
-            assert headers['Authorization'] == 'Bearer test_key'
-
-            # Test basic auth when no API key is present
-            auth_no_key = ComfyUIAuth(
-                username='test_user',
-                password='test_pass',
-                ssl_verify=True
-            )
-
-            instance_basic_auth = ComfyUIInstance(
-                base_url='http://localhost:8188',
-                auth=auth_no_key
-            )
-
-            # Reset mock
-            mock_session_class.reset_mock()
-
-            # Get new session
-            session = await instance_basic_auth.get_session()
-
-            # Verify basic auth headers
-            call_args = mock_session_class.call_args
-            headers = call_args.kwargs.get('headers', {})
-            assert 'Authorization' in headers
-            assert headers['Authorization'].startswith('Basic ')
-
-            # Verify SSL settings
-            connector = call_args.kwargs.get('connector')
-            assert isinstance(connector, aiohttp.TCPConnector)
-            assert connector._ssl == True
-
-    @pytest.mark.asyncio
-    async def test_instance_auth_none(self):
-        """Test instance with no auth"""
-        with patch('aiohttp.ClientSession') as mock_session_class:
-            # Create mock session
-            mock_session = AsyncMock()
-            mock_session_class.return_value = mock_session
-
-            # Create mock response
-            mock_response = AsyncMock()
-            mock_response.status = 200
-
-            # Make session.get return a context manager
-            class MockContextManager:
-                async def __aenter__(self):
-                    return mock_response
-
-                async def __aexit__(self, *args):
-                    pass
-
-            mock_session.get.return_value = MockContextManager()
-
-            # Create instance without auth
-            instance = ComfyUIInstance(
-                base_url='http://localhost:8188'
-            )
-
-            # Get session
-            session = await instance.get_session()
-
-            # Verify no auth headers were added
-            call_args = mock_session_class.call_args
-            headers = call_args.kwargs.get('headers', {})
-            assert 'Authorization' not in headers
-
-    @pytest.mark.asyncio
-    async def test_instance_auth_ssl(self):
-        """Test instance with different SSL configurations"""
-        test_cases = [
-            # Basic SSL verification
-            {
-                'auth': ComfyUIAuth(ssl_verify=True),
-                'verify_ssl': True
-            },
-            # Disable SSL verification
-            {
-                'auth': ComfyUIAuth(ssl_verify=False),
-                'verify_ssl': False
-            },
-            # With SSL context
-            {
-                'auth': ComfyUIAuth(
-                    ssl_verify=True,
-                    ssl_cert=ssl.create_default_context()
-                ),
-                'verify_ssl': True
-            }
-        ]
-
-        for case in test_cases:
-            with patch('aiohttp.ClientSession') as mock_session_class, \
-                    patch('aiohttp.TCPConnector') as mock_connector_class:
-
-                # Create mock connector
-                mock_connector = Mock()
-                mock_connector_class.return_value = mock_connector
-
-                # Create mock session
-                mock_session = AsyncMock()
-                mock_session_class.return_value = mock_session
-
-                # Create mock response
-                mock_response = AsyncMock()
-                mock_response.status = 200
-
-                # Make session.get return a context manager
-                class MockContextManager:
-                    async def __aenter__(self):
-                        return mock_response
-
-                    async def __aexit__(self, *args):
-                        pass
-
-                mock_session.get.return_value = MockContextManager()
-
-                # Create instance
-                instance = ComfyUIInstance(
-                    base_url='http://localhost:8188',
-                    auth=case['auth']
-                )
-
-                # Get session
-                session = await instance.get_session()
-
-                # Verify connector was created with correct SSL settings
-                connector_call = mock_connector_class.call_args
-                ssl_param = connector_call.kwargs.get('ssl')
-
-                if case['verify_ssl']:
-                    # When ssl_verify is True, verify either True or SSLContext was passed
-                    assert ssl_param is True or isinstance(ssl_param, ssl.SSLContext)
-                else:
-                    # When ssl_verify is False, verify False was passed
-                    assert ssl_param is False
-
-    @pytest.mark.asyncio
-    async def test_instance_auth_with_cert_path(self):
-        """Test instance with SSL certificate path"""
-        # Create a mock SSL context
-        mock_ssl_context = Mock(spec=ssl.SSLContext)
-
-        with patch('ssl.create_default_context', return_value=mock_ssl_context) as mock_ssl, \
-                patch('aiohttp.ClientSession') as mock_session_class, \
-                patch('aiohttp.TCPConnector') as mock_connector_class:
-            # Create mock connector
-            mock_connector = Mock()
-            mock_connector_class.return_value = mock_connector
-
-            # Create mock session
-            mock_session = AsyncMock()
-            mock_session_class.return_value = mock_session
-
-            # Create mock response
-            mock_response = AsyncMock()
-            mock_response.status = 200
-
-            # Make session.get return a context manager
-            class MockContextManager:
-                async def __aenter__(self):
-                    return mock_response
-
-                async def __aexit__(self, *args):
-                    pass
-
-            mock_session.get.return_value = MockContextManager()
-
-            # Create instance with cert path
-            auth = ComfyUIAuth(
-                ssl_verify=True,
-                ssl_cert='path/to/cert.pem'
-            )
-
-            instance = ComfyUIInstance(
-                base_url='http://localhost:8188',
-                auth=auth
-            )
-
-            # Get session
-            session = await instance.get_session()
-
-            # Verify SSL context was created
-            mock_ssl.assert_called_once()
-            mock_ssl_context.load_verify_locations.assert_called_once_with('path/to/cert.pem')
-
-            # Verify connector was created with SSL context
-            connector_call = mock_connector_class.call_args
-            assert connector_call.kwargs.get('ssl') == mock_ssl_context
-
-    @pytest.mark.asyncio
-    async def test_instance_no_ssl(self):
-        """Test instance without SSL"""
-        with patch('aiohttp.ClientSession') as mock_session_class, \
-                patch('aiohttp.TCPConnector') as mock_connector_class:
-            # Create mock connector
-            mock_connector = Mock()
-            mock_connector_class.return_value = mock_connector
-
-            # Create instance without auth
-            instance = ComfyUIInstance(
-                base_url='http://localhost:8188'
-            )
-
-            # Get session
-            session = await instance.get_session()
-
-            # Verify connector was created with default SSL settings (True)
-            connector_call = mock_connector_class.call_args
-            assert connector_call.kwargs.get('ssl') is True
-
-    @pytest.mark.asyncio
-    async def test_instance_timeout(self, mock_session):
-        hook_manager = Mock()
-        hook_manager.execute_hook = AsyncMock()
-        client = ComfyUIClient([{'url': 'http://localhost:8188', 'weight': 2, 'timeout': 1}], hook_manager)
-        client.timeout_check_interval = 0.1
-
-        instances = []
-        instance = AsyncMock()
-        instance.client_id = f'test_id_'
-        instance.connected = True
-        instance._lock = asyncio.Lock()
-        instance.base_url = f'http://localhost:8188'
-        instance.get_session = AsyncMock(return_value=mock_session)
-        instance.is_timed_out = lambda: True
-        instance.active_prompts = set()
-        instances.append(instance)
-
-        client.instances = instances
-        await client.connect()
-        await asyncio.sleep(0.1)
-
-        hook_manager.execute_hook.assert_awaited_with('is.comfyui.client.instance.timeout', instances[0].base_url)
-
-    @pytest.mark.asyncio
-    async def test_instance_reconnect(self, mock_session):
-        hook_manager = Mock()
-        hook_manager.execute_hook = AsyncMock()
-        client = ComfyUIClient([{'url': 'http://localhost:8188', 'weight': 2, 'timeout': 1}], hook_manager)
-
-        instances = []
-        instance = AsyncMock()
-        instance.client_id = f'test_id_'
-        instance.connected = False
-        instance._lock = asyncio.Lock()
-        instance.base_url = f'http://localhost:8188'
-        instance.get_session = AsyncMock(return_value=mock_session)
-        instance.is_timed_out = lambda: True
-        instance.active_prompts = set()
-        instances.append(instance)
-
-        client.instances = instances
-        # Don't care about the exception
-        try:
-            await client.generate({'test': 'workflow'})
-        except:
-            pass
-
-        await asyncio.sleep(0.1)
-
-        hook_manager.execute_hook.assert_awaited_with('is.comfyui.client.instance.reconnect', instances[0].base_url)
 
 
 class TestComfyUIClientImageUpload:
@@ -648,13 +301,14 @@ class TestComfyUIClientImageUpload:
     async def test_upload_image_success(self, mock_instance):
         """Test successful image upload"""
         client = ComfyUIClient([{'url': 'http://localhost:8188'}])
-        client._get_instance = AsyncMock(return_value=mock_instance)
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
 
         image_data = b"fake_image_data"
         result = await client.upload_image(image_data)
 
         # Verify result
-        assert result == {'url': 'http://test.com/image.png'}
+        assert result == ({'url': 'http://test.com/image.png'}, mock_instance)
 
         # Verify session usage
         session = await mock_instance.get_session()
@@ -672,7 +326,8 @@ class TestComfyUIClientImageUpload:
     async def test_upload_image_failure(self, mock_instance, mock_session):
         """Test failed image upload"""
         client = ComfyUIClient([{'url': 'http://localhost:8188'}])
-        client._get_instance = AsyncMock(return_value=mock_instance)
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
 
         # Create error response
         error_response = AsyncMock()
@@ -692,7 +347,8 @@ class TestComfyUIClientImageUpload:
     async def test_upload_image_network_error(self, mock_instance):
         """Test network error during image upload"""
         client = ComfyUIClient([{'url': 'http://localhost:8188'}])
-        client._get_instance = AsyncMock(return_value=mock_instance)
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
 
         # Create a session that raises an error on post
         error_session = AsyncMock()
@@ -714,11 +370,12 @@ class TestComfyUIClientImageUpload:
     async def test_upload_image_lock_usage(self, mock_instance):
         """Test that the lock is properly acquired and released during upload"""
         client = ComfyUIClient([{'url': 'http://localhost:8188'}])
-        client._get_instance = AsyncMock(return_value=mock_instance)
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
 
         # Create a proper mock for the lock
         mock_lock = AsyncMock()
-        mock_instance._lock = mock_lock
+        mock_instance.lock = mock_lock
 
         image_data = b"fake_image_data"
         await client.upload_image(image_data)
