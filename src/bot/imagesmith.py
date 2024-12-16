@@ -11,7 +11,9 @@ import discord
 from discord.ext import commands
 
 from logger import logger
+from tests.comfy.test_instance import instance
 from .commands import forge_command, reforge_command, upscale_command, workflows_command
+from ..comfy.load_balancer import LoadBalanceStrategy
 from ..comfy.workflow_manager import WorkflowManager
 from ..core.form import DynamicFormManager
 from ..core.hook_manager import HookManager
@@ -43,19 +45,30 @@ class ComfyUIBot(commands.Bot):
         # This is temporary solution before rewriting the SecurityManager
         self.basic_security = BasicSecurity(self)
 
+    async def _hook(self, event_name, *args, **kwargs):
+        await self.hook_manager.execute_hook(event_name, *args, **kwargs)
+
     async def setup_hook(self) -> None:
         """Setup hook that runs when the bot starts"""
         logger.info("Setting up bot...")
+
         await self.load_plugins()
 
         try:
-            await self.hook_manager.execute_hook('is.comfyui.client.before_create',
-                                                 self.workflow_manager.config['comfyui']['instances'])
-            self.comfy_client = ComfyUIClient(self.workflow_manager.config['comfyui']['instances'], self.hook_manager)
-            await self.hook_manager.execute_hook('is.comfyui.client.after_create',
-                                                 self.workflow_manager.config['comfyui']['instances'])
+            config = self.workflow_manager.config.get('comfyui')
+            lb_strategy = config.get('load_balancer', {}).get('strategy', LoadBalanceStrategy.LEAST_BUSY.name)
 
+            await self._hook('is.comfyui.client.before_create', config['instances'])
+
+            self.comfy_client = ComfyUIClient(
+                instances_config=config['instances'],
+                hook_manager=self.hook_manager,
+                load_balancer_strategy=LoadBalanceStrategy(lb_strategy),
+            )
+
+            await self._hook('is.comfyui.client.after_create', config['instances'])
             await self.comfy_client.connect()
+
             logger.info("Connected to ComfyUI")
         except Exception as e:
             logger.error(f"Failed to connect to ComfyUI: {e}")
@@ -276,9 +289,13 @@ class ComfyUIBot(commands.Bot):
 
             image = None
             input_image_file = None
+            instance = None
             if input_image:
                 input_image_file = await input_image.read()
-                image = await self.comfy_client.upload_image(input_image_file)
+                uploaded_image = await self.comfy_client.upload_image(input_image_file)
+                image = uploaded_image[0]
+                # We want to use the same instance for the image upload and generation
+                instance = uploaded_image[1]
 
             async def run_generation():
                 try:
@@ -299,7 +316,8 @@ class ComfyUIBot(commands.Bot):
                     if modified_workflow_json is None:
                         return  # Form processing failed or timed out
 
-                    result = await self.comfy_client.generate(workflow_json)
+                    result = await self.comfy_client.generate(workflow_json, instance)
+
                     if 'error' in result:
                         raise Exception(result['error'])
 

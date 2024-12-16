@@ -1,159 +1,28 @@
 import io
-import ssl
 import urllib
-from datetime import datetime, timedelta
 
 import discord
-from typing import List, Optional, Dict
+from typing import List, Dict
 import aiohttp
 import websockets
-import uuid
 import json
 import asyncio
 import urllib.parse
-import base64
-from enum import Enum
-import random
-from dataclasses import dataclass
 
 from logger import logger
-
-
-class LoadBalanceStrategy(Enum):
-    ROUND_ROBIN = "round_robin"
-    RANDOM = "random"
-    LEAST_BUSY = "least_busy"
-
-
-@dataclass
-class ComfyUIAuth:
-    username: Optional[str] = None
-    password: Optional[str] = None
-    api_key: Optional[str] = None
-    ssl_verify: bool = True
-    ssl_cert: Optional[str] = None
-
-
-class ComfyUIInstance:
-    def __init__(self,
-                 base_url: str,
-                 weight: int = 1,
-                 auth: Optional[ComfyUIAuth] = None,
-                 timeout: int = 900):
-        self.base_url = base_url.rstrip('/')
-        self.ws_url = self.base_url.replace('http', 'ws')
-        self.weight = weight
-        self.auth = auth
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.ws: Optional[websockets.WebSocketClientProtocol] = None
-        self.client_id = str(uuid.uuid4())
-        self.active_generations = 0
-        self.total_generations = 0
-        self.last_used = datetime.now()
-        self.connected = False
-        self._lock = asyncio.Lock()
-        self.active_prompts = set()
-        self.timeout = timeout
-        self.timeout_task: Optional[asyncio.Task] = None
-
-    async def initialize(self):
-        """Initialize instance connections"""
-        try:
-            session = await self.get_session()
-
-            async with session.get(f"{self.base_url}/history") as response:
-                if response.status == 401:
-                    raise Exception("Authentication failed")
-                elif response.status != 200:
-                    raise Exception(f"Failed to connect to ComfyUI API: {response.status}")
-
-            ws_headers = {}
-            if self.auth and self.auth.api_key:
-                ws_headers['Authorization'] = f'Bearer {self.auth.api_key}'
-
-            ws_kwargs = {
-                'origin': self.base_url,
-                'extra_headers': ws_headers,
-            }
-
-            if self.ws_url.startswith('wss://'):
-                ws_kwargs['ssl'] = self.auth.ssl_verify if self.auth else True
-
-            self.ws = await websockets.connect(
-                f"{self.ws_url}/ws?clientId={self.client_id}",
-                **ws_kwargs
-            )
-
-            self.connected = True
-            logger.info(f"Connected to ComfyUI instance at {self.base_url}")
-
-        except Exception as e:
-            self.connected = False
-            await self.cleanup()
-            raise logger.error(f"Failed to connect to ComfyUI instance {self.base_url}: {e}")
-
-    async def mark_used(self):
-        """Mark the instance as recently used"""
-        self.last_used = datetime.now()
-
-    def is_timed_out(self) -> bool:
-        """Check if instance has timed out"""
-        if self.timeout <= 0:
-            return False
-        time_since_last_use = datetime.now() - self.last_used
-        return time_since_last_use > timedelta(seconds=self.timeout)
-
-    async def cleanup(self):
-        """Clean up instance connections"""
-        async with self._lock:
-            try:
-                if self.ws:
-                    await self.ws.close()
-                    self.ws = None
-                if self.session:
-                    await self.session.close()
-                    self.session = None
-                self.connected = False
-            except Exception as e:
-                logger.error(f"Error during cleanup of instance {self.base_url}: {e}")
-
-    async def get_session(self) -> aiohttp.ClientSession:
-        """Get or create an HTTP session with proper authentication"""
-        if not self.session:
-            headers = {}
-            if self.auth:
-                if self.auth.api_key:
-                    headers['Authorization'] = f'Bearer {self.auth.api_key}'
-                elif self.auth.username and self.auth.password:
-                    auth_str = base64.b64encode(
-                        f"{self.auth.username}:{self.auth.password}".encode()
-                    ).decode()
-                    headers['Authorization'] = f'Basic {auth_str}'
-
-            ssl_context = None
-            if self.auth:
-                if isinstance(self.auth.ssl_cert, ssl.SSLContext):
-                    ssl_context = self.auth.ssl_cert
-                elif isinstance(self.auth.ssl_cert, str):
-                    ssl_context = ssl.create_default_context()
-                    ssl_context.load_verify_locations(self.auth.ssl_cert)
-
-            self.session = aiohttp.ClientSession(
-                headers=headers,
-                connector=aiohttp.TCPConnector(
-                    ssl=ssl_context if ssl_context else self.auth.ssl_verify if self.auth else True
-                )
-            )
-
-        return self.session
+from src.comfy.instance import ComfyUIInstance, ComfyUIAuth
+from src.comfy.load_balancer import LoadBalanceStrategy, LoadBalancer
 
 
 class ComfyUIClient:
-    """Load-balanced client for interacting with multiple ComfyUI instances"""
-
-    def __init__(self, instances_config: List[Dict], hook_manager=None):
+    def __init__(
+            self,
+            instances_config: List[Dict],
+            hook_manager=None,
+            load_balancer_strategy=LoadBalanceStrategy.LEAST_BUSY,
+    ):
         self.instances: List[ComfyUIInstance] = []
-        self.strategy = LoadBalanceStrategy.LEAST_BUSY
+        self.load_balancer = LoadBalancer(self.instances, load_balancer_strategy, hook_manager)
         self.current_instance_index = 0
         self.prompt_to_instance = {}
         self.hook_manager = hook_manager
@@ -190,22 +59,6 @@ class ComfyUIClient:
         # Start timeout checker
         self.timeout_check_task = asyncio.create_task(self._check_timeouts())
 
-    async def _check_timeouts(self):
-        """Periodically check for timed out instances"""
-        while True:
-            try:
-                for instance in self.instances:
-                    if instance.connected and instance.is_timed_out() and not instance.active_prompts:
-                        logger.info(f"Instance {instance.base_url} timed out, cleaning up...")
-                        await instance.cleanup()
-                        if self.hook_manager:
-                            await self.hook_manager.execute_hook('is.comfyui.client.instance.timeout',
-                                                                 instance.base_url)
-            except Exception as e:
-                logger.error(f"Error in timeout checker: {e}")
-
-            await asyncio.sleep(self.timeout_check_interval)
-
     async def close(self):
         """Close connections to all instances"""
         if self.timeout_check_task:
@@ -219,66 +72,11 @@ class ComfyUIClient:
             cleanup_tasks = [instance.cleanup() for instance in self.instances]
             await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
-    def _select_instance_round_robin(self) -> ComfyUIInstance:
-        connected_instances = [i for i in self.instances if i.connected]
+    async def generate(self, workflow: dict, instance: ComfyUIInstance = None) -> dict:
+        if not instance:
+            instance = await self.load_balancer.get_instance()
 
-        if not connected_instances:
-            raise Exception("No connected instances available")
-
-        instance = connected_instances[self.current_instance_index % len(connected_instances)]
-        self.current_instance_index += 1
-        return instance
-
-    def _select_instance_random(self) -> ComfyUIInstance:
-        connected_instances = [i for i in self.instances if i.connected]
-        if not connected_instances:
-            raise Exception("No connected instances available")
-
-        weights = [instance.weight for instance in connected_instances]
-        return random.choices(connected_instances, weights=weights, k=1)[0]
-
-    def _select_instance_least_busy(self) -> ComfyUIInstance:
-        connected_instances = [i for i in self.instances if i.connected]
-
-        if not connected_instances:
-            raise Exception("No connected instances available")
-
-        return min(connected_instances,
-                   key=lambda i: i.active_generations / i.weight)
-
-    async def _get_instance(self) -> ComfyUIInstance:
-        instance = await self._select_instance()
-        await instance.mark_used()
-        return instance
-
-    async def _select_instance(self) -> ComfyUIInstance:
-        strategies = {
-            LoadBalanceStrategy.ROUND_ROBIN: self._select_instance_round_robin,
-            LoadBalanceStrategy.RANDOM: self._select_instance_random,
-            LoadBalanceStrategy.LEAST_BUSY: self._select_instance_least_busy
-        }
-
-        # Filter out disconnected or timed out instances
-        available_instances = [i for i in self.instances if i.connected and not i.is_timed_out()]
-
-        if not available_instances:
-            for instance in self.instances:
-                if not instance.connected and not instance.active_prompts:
-                    logger.info(f"Attempting to reconnect to instance {instance.base_url}")
-                    await self.hook_manager.execute_hook('is.comfyui.client.instance.reconnect', instance.base_url)
-                    await instance.initialize()
-
-            available_instances = [i for i in self.instances if i.connected]
-            if not available_instances:
-                raise Exception("No available instances")
-
-        self.instances = available_instances
-        return strategies[self.strategy]()
-
-    async def generate(self, workflow: dict) -> dict:
-        instance = await self._get_instance()
-
-        async with instance._lock:
+        async with instance.lock:
             try:
                 instance.active_generations += 1
 
@@ -307,10 +105,10 @@ class ComfyUIClient:
             finally:
                 instance.active_generations -= 1
 
-    async def upload_image(self, image_data: bytes) -> str:
-        instance = await self._get_instance()
+    async def upload_image(self, image_data: bytes) -> tuple[str, ComfyUIInstance]:
+        instance = await self.load_balancer.get_instance()
 
-        async with instance._lock:
+        async with instance.lock:
             try:
                 session = await instance.get_session()
 
@@ -326,52 +124,11 @@ class ComfyUIClient:
                         raise Exception(f"Image upload failed with status {response.status}: {error_text}")
 
                     result = await response.json()
-                    return result
+                    return result, instance
 
             finally:
                 await instance.mark_used()
 
-    async def _test_image_access(self, url: str) -> bool:
-        """Test if an image URL is accessible"""
-        if self.session is None:
-            return False
-
-        try:
-            async with self.session.get(url) as response:
-                return response.status == 200
-        except Exception as e:
-            logger.error(f"Error testing image access: {e}")
-            return False
-
-    def _get_image_url(self, instance: ComfyUIInstance, image_data: dict) -> str:
-        """Construct the image URL for a specific instance"""
-        try:
-            filename = image_data.get('filename')
-            subfolder = image_data.get('subfolder', '')
-            type_ = image_data.get('type', 'output')
-
-            params = []
-            if filename:
-                params.append(f"filename={urllib.parse.quote(filename)}")
-            if subfolder:
-                params.append(f"subfolder={urllib.parse.quote(subfolder)}")
-            if type_:
-                params.append(f"type={urllib.parse.quote(type_)}")
-
-            query_string = '&'.join(params)
-            url = f"{instance.base_url}/view?{query_string}"
-            logger.debug(f"Generated image URL: {url}")
-            return url
-        except Exception as e:
-            logger.error(f"Error generating image URL: {e}")
-            return None
-
-    def _create_progress_bar(self, value: int, max_value: int, length: int = 10) -> str:
-        """Create a text-based progress bar"""
-        filled = int(length * (value / max_value))
-        bar = '█' * filled + '░' * (length - filled)
-        percentage = int(100 * (value / max_value))
-        return f"[{bar}] {percentage}%"
 
     async def listen_for_updates(self, prompt_id: str, message_callback):
         """Listen for updates about a specific generation"""
@@ -446,7 +203,7 @@ class ComfyUIClient:
                         if node_output and isinstance(node_output, dict) and 'images' in node_output:
                             for image_data in node_output['images']:
                                 if isinstance(image_data, dict) and 'filename' in image_data:
-                                    image_url = self._get_image_url(instance, image_data)
+                                    image_url = self._get_resource_url(instance, image_data)
                                     if image_url:
                                         async with instance.session.get(image_url) as response:
                                             if response.status == 200:
@@ -461,7 +218,7 @@ class ComfyUIClient:
                         if node_output and isinstance(node_output, dict) and 'gifs' in node_output:
                             for video_data in node_output['gifs']:
                                 if isinstance(video_data, dict) and 'filename' in video_data:
-                                    video_url = self._get_image_url(instance, video_data)
+                                    video_url = self._get_resource_url(instance, video_data)
                                     if video_url:
                                         async with instance.session.get(video_url) as response:
                                             if response.status == 200:
@@ -512,3 +269,49 @@ class ComfyUIClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
+
+    def _create_progress_bar(self, value: int, max_value: int, length: int = 10) -> str:
+        """Create a text-based progress bar"""
+        filled = int(length * (value / max_value))
+        bar = '█' * filled + '░' * (length - filled)
+        percentage = int(100 * (value / max_value))
+        return f"[{bar}] {percentage}%"
+
+    async def _check_timeouts(self):
+        """Periodically check for timed out instances"""
+        while True:
+            try:
+                for instance in self.instances:
+                    if instance.connected and instance.is_timed_out() and not instance.active_prompts:
+                        logger.info(f"Instance {instance.base_url} timed out, cleaning up...")
+                        await instance.cleanup()
+                        if self.hook_manager:
+                            await self.hook_manager.execute_hook('is.comfyui.client.instance.timeout',
+                                                                 instance.base_url)
+            except Exception as e:
+                logger.error(f"Error in timeout checker: {e}")
+
+            await asyncio.sleep(self.timeout_check_interval)
+
+    def _get_resource_url(self, instance: ComfyUIInstance, image_data: dict) -> str:
+        """Construct the image URL for a specific instance"""
+        try:
+            filename = image_data.get('filename')
+            subfolder = image_data.get('subfolder', '')
+            type_ = image_data.get('type', 'output')
+
+            params = []
+            if filename:
+                params.append(f"filename={urllib.parse.quote(filename)}")
+            if subfolder:
+                params.append(f"subfolder={urllib.parse.quote(subfolder)}")
+            if type_:
+                params.append(f"type={urllib.parse.quote(type_)}")
+
+            query_string = '&'.join(params)
+            url = f"{instance.base_url}/view?{query_string}"
+            logger.debug(f"Generated image URL: {url}")
+            return url
+        except Exception as e:
+            logger.error(f"Error generating image URL: {e}")
+            return None
