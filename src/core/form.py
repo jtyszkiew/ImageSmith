@@ -72,7 +72,7 @@ class SubmitButton(ui.Button):
 
         # Mark form as submitted
         self.form_view.submitted = True
-        await interaction.response.send_message("Form submitted successfully!", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
 
 @dataclass
@@ -222,16 +222,8 @@ class FormModal(ui.Modal):
             interaction.client.form_data[self.field.name] = processed_value
             self.completed_fields.add(self.field.name)
 
-            # Format the response message based on the value type
-            response_value = (
-                f"{', '.join(processed_value)}" if isinstance(processed_value, (list, tuple))
-                else str(processed_value)
-            )
 
-            await interaction.response.send_message(
-                f"Received {self.field.name}: {response_value}",
-                ephemeral=True
-            )
+            await interaction.response.defer(ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(
                 f"Error processing {self.field.name}: {str(e)}",
@@ -302,10 +294,7 @@ class FormView(ui.View):
                 interaction.client.form_data[field_name] = values
                 self.completed_fields.add(field_name)
 
-                await interaction.response.send_message(
-                    f"Selected {field_name}: {', '.join(values)}",
-                    ephemeral=True
-                )
+                await interaction.response.defer(ephemeral=True)
             except Exception as e:
                 await interaction.response.send_message(
                     f"Error processing selection: {str(e)}",
