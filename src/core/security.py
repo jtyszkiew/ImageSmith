@@ -28,14 +28,15 @@ class SecurityManager:
             return SecurityResult(False, f"You don't have permission to use this workflow.")
 
         allowed_roles = security_config.get('allowed_roles', [])
-        member_roles = [role.name for role in member.roles]
+        if hasattr(member, 'roles'):
+            member_roles = [role.name for role in member.roles]
+            if len(allowed_roles) > 0 and not any(role in allowed_roles for role in member_roles):
+                return SecurityResult(False, f"You don't have required roles to use this workflow.")
 
-        if len(allowed_roles) > 0 and not any(role in allowed_roles for role in member_roles):
-            return SecurityResult(False, f"You don't have required roles to use this workflow.")
-
-        allowed_channels = security_config.get('allowed_channels', [])
-        if len(allowed_channels) > 0 and interaction.channel.name not in allowed_channels:
-            return SecurityResult(False, f"This workflow is not allowed on this channel.")
+        if hasattr(interaction, 'channel'):
+            allowed_channels = security_config.get('allowed_channels', [])
+            if len(allowed_channels) > 0 and interaction.channel.name not in allowed_channels:
+                return SecurityResult(False, f"This workflow is not allowed on this channel.")
 
         return SecurityResult(True)
 
