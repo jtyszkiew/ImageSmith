@@ -1,4 +1,5 @@
 import io
+import struct
 import urllib
 
 import discord
@@ -8,6 +9,7 @@ import websockets
 import json
 import asyncio
 import urllib.parse
+from PIL import Image
 
 from logger import logger
 from src.comfy.instance import ComfyUIInstance, ComfyUIAuth
@@ -137,8 +139,10 @@ class ComfyUIClient:
         if not instance or not instance.connected:
             raise Exception(f"No connected instance found for prompt {prompt_id}")
 
+        milestones = [25, 50, 75, 100]
         current_image_data = None
         current_image_filename = None
+        latest_preview_image = None
         generation_complete = False
         node_progress = {}
 
@@ -146,6 +150,25 @@ class ComfyUIClient:
             while not generation_complete:
                 try:
                     message = await instance.ws.recv()
+                    if isinstance(message, bytes):
+                        if len(message) <= 8:
+                            continue
+
+                        event_type = struct.unpack('>I', message[:4])[0]
+                        image_type = struct.unpack('>I', message[4:8])[0]
+                        image_data = message[8:]
+
+                        try:
+                            with Image.open(io.BytesIO(image_data)) as img:
+                                buffer = io.BytesIO()
+                                img.save(buffer, format="JPEG")
+                                buffer.seek(0)
+                                latest_preview_image = discord.File(buffer, filename="preview.jpg")
+                        except Exception as e:
+                            logger.error(f"Failed to decode preview image: {e}")
+
+                        continue
+
                     data = json.loads(message)
 
                     msg_type = data.get('type')
@@ -162,7 +185,6 @@ class ComfyUIClient:
                         max_value = msg_data.get('max', 100)
 
                         progress_percentage = (value / max_value) * 100
-                        milestones = [25, 50, 75, 100]
 
                         if node_progress.get(node, {}).get('last_milestone') == 100 and progress_percentage < 100:
                             node_progress[node] = {'last_milestone': 0}
@@ -176,7 +198,10 @@ class ComfyUIClient:
                                 }
                                 progress_bar = self._create_progress_bar(value, max_value)
                                 status = f"🔄 Processing node {node}...\n{progress_bar}"
-                                await message_callback(status, None)
+                                if latest_preview_image and not latest_preview_image.fp.closed:
+                                    await message_callback(status, latest_preview_image)
+                                else:
+                                    await message_callback(status, None)
 
                     elif msg_type == 'executing':
                         node_id = msg_data.get('node')
