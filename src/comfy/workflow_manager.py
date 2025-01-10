@@ -116,7 +116,7 @@ class WorkflowManager:
 
     def load_workflow_file(self, workflow_path: str) -> dict:
         """Load workflow JSON file"""
-        with open(workflow_path, 'r') as f:
+        with open(workflow_path, 'r', encoding='utf8') as f:
             return json.load(f)
 
     def _apply_setting(self, workflow_json: dict, setting_name: str, setting_def: dict, params: list[Any] = None):
