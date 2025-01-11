@@ -205,7 +205,7 @@ class ComfyUIBot(commands.Bot):
         """Handle image generation for all command types"""
         try:
             workflow_name = workflow or self.workflow_manager.get_default_workflow(workflow_type,
-                                                                                   channel_name=interaction.channel.name,
+                                                                                   channel_name=getattr(interaction.channel, 'name', None),
                                                                                    user_name=interaction.user.name)
             workflow_config = self.workflow_manager.get_workflow(workflow_name)
 
