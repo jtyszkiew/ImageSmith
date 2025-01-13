@@ -55,18 +55,20 @@ class ComfyUIBot(commands.Bot):
         await self.load_plugins()
 
         try:
-            config = self.workflow_manager.config.get('comfyui')
-            lb_strategy = config.get('load_balancer', {}).get('strategy', LoadBalanceStrategy.LEAST_BUSY.name)
+            comfyui = self.workflow_manager.config.get('comfyui')
+            if not comfyui:
+                raise Exception("ComfyUI settings not found in configuration file")
+            lb_strategy = comfyui.get('load_balancer', {}).get('strategy', LoadBalanceStrategy.LEAST_BUSY.name)
 
-            await self._hook('is.comfyui.client.before_create', config['instances'])
+            await self._hook('is.comfyui.client.before_create', comfyui['instances'])
 
             self.comfy_client = ComfyUIClient(
-                instances_config=config['instances'],
+                instances_config=comfyui['instances'],
                 hook_manager=self.hook_manager,
                 load_balancer_strategy=LoadBalanceStrategy(lb_strategy),
             )
 
-            await self._hook('is.comfyui.client.after_create', config['instances'])
+            await self._hook('is.comfyui.client.after_create', comfyui['instances'])
             await self.comfy_client.connect()
 
             logger.info("Connected to ComfyUI")
@@ -77,9 +79,16 @@ class ComfyUIBot(commands.Bot):
 
         logger.info("Registering commands...")
         try:
-            self.tree.add_command(forge_command(self))
-            self.tree.add_command(reforge_command(self))
-            self.tree.add_command(upscale_command(self))
+            workflows = self.workflow_manager.config.get('workflows')
+            if not workflows:
+                raise Exception("No workflows found in configuration file")
+            if 'forge' in workflows:
+                self.tree.add_command(forge_command(self))
+            if 'reforge' in workflows:
+                self.tree.add_command(reforge_command(self))
+            if 'uspcale' in workflows:
+                self.tree.add_command(upscale_command(self))
+
             self.tree.add_command(workflows_command(self))
 
             commands = await self.tree.sync()
