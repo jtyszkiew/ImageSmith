@@ -5,13 +5,18 @@
 [![Discord](https://img.shields.io/discord/1301892549568368651.svg?label=Discord)](https://discord.gg/9Ne74HPEue)
 ![Codecov](https://img.shields.io/codecov/c/github/jtyszkiew/ImageSmith)
 
-> Forge your imagination into reality with ImageSmith - A powerful Discord bot that seamlessly integrates with ComfyUI for intuitive image generation.
+> Forge your imagination into reality with ImageSmith - A powerful Discord bot that seamlessly integrates with ComfyUI
+> for intuitive image generation.
 
 ## ✨ Overview
 
-ImageSmith is a Discord bot that brings the power of ComfyUI directly to your Discord server. With a user-friendly interface and powerful customization options, it allows users to generate images through simple commands while leveraging ComfyUI's advanced capabilities.
+ImageSmith is a Discord bot that brings the power of ComfyUI directly to your Discord server. With a user-friendly
+interface and powerful customization options, it allows users to generate images through simple commands while
+leveraging ComfyUI's advanced capabilities.
 
-> **Note**: ImageSmith is a workflow executor, not a workflow creator. You'll need to create your own workflows, but the bot makes them easily accessible through Discord's UI. Check out the example workflows in the repository to get started.
+> **Note**: ImageSmith is a workflow executor, not a workflow creator. You'll need to create your own workflows, but the
+> bot makes them easily accessible through Discord's UI. Check out the example workflows in the repository to get
+> started.
 
 ## 🌟 Key Features
 
@@ -36,11 +41,13 @@ ImageSmith is a Discord bot that brings the power of ComfyUI directly to your Di
 #### 🐳 Docker
 
 **Basic Setup**
+
 ```bash
 docker run -e DISCORD_TOKEN="<your_discord_token>" ghcr.io/jtyszkiew/imagesmith:latest
 ```
 
 **Custom Configuration**
+
 ```bash
 docker run -e DISCORD_TOKEN="<your_discord_token>" \
   --mount type=bind,source=./configuration.yml,target=/app/configuration.yml \
@@ -48,6 +55,7 @@ docker run -e DISCORD_TOKEN="<your_discord_token>" \
 ```
 
 **Custom Configuration & Workflows**
+
 ```bash
 docker run -e DISCORD_TOKEN="<your_discord_token>" \
   --mount type=bind,source=./configuration.yml,target=/app/configuration.yml \
@@ -55,11 +63,13 @@ docker run -e DISCORD_TOKEN="<your_discord_token>" \
   ghcr.io/jtyszkiew/imagesmith:latest
 ```
 
-> **Important**: Default workflows use `sd_xl_base_1.0` for image generation and Mochi models for video generation. Ensure these are available in your ComfyUI instance.
+> **Important**: Default workflows use `sd_xl_base_1.0` for image generation and Mochi models for video generation.
+> Ensure these are available in your ComfyUI instance.
 
 #### 🔧 From Source
 
 1. **Clone & Setup**
+
 ```bash
 git clone https://github.com/jtyszkiew/ImageSmith.git
 cd ImageSmith
@@ -69,12 +79,14 @@ pip install -r requirements.txt
 ```
 
 2. **Configure**
+
 ```bash
 cp configuration.example.yml configuration.yml
 # Edit configuration.yml with your settings
 ```
 
 3. **Run**
+
 ```bash
 python main.py
 ```
@@ -83,12 +95,12 @@ python main.py
 
 ### Available Commands
 
-| Command | Description | Parameters |
-|---------|-------------|------------|
-| `/forge` | Generate image from text | `prompt`, `[workflow]`, `[settings]` |
-| `/reforge` | Transform existing image | `image`, `prompt`, `[workflow]`, `[settings]` |
-| `/upscale` | Upscale with modifications | `image`, `prompt`, `[workflow]`, `[settings]` |
-| `/workflows` | List available workflows | - |
+| Command      | Description                | Parameters                                    |
+|--------------|----------------------------|-----------------------------------------------|
+| `/forge`     | Generate image from text   | `prompt`, `[workflow]`, `[settings]`          |
+| `/reforge`   | Transform existing image   | `image`, `prompt`, `[workflow]`, `[settings]` |
+| `/upscale`   | Upscale with modifications | `image`, `prompt`, `[workflow]`, `[settings]` |
+| `/workflows` | List available workflows   | -                                             |
 
 ### Example Usage
 
@@ -132,6 +144,51 @@ Two settings types: `__before` and `__after` are called before each workflow exe
 
 Usage: `/forge A fantasy character --settings "hd()"`
 
+### Making workflow default on given channel
+
+```yaml
+workflows:
+  forge:
+    default_for:
+      channels:
+        - "forge-default-channel"
+```
+
+This setting will make the `forge` workflow default for the `forge-default-channel` channel. So you can use `/forge`
+command without specifying the workflow name.
+
+### Adding simple forms
+
+```yaml
+workflows:
+  forge:
+    form:
+      - name: seed
+        type: text
+        required: false
+        description: Seed for the model
+        message: Provide a seed you would like to use
+        on_submit: |
+          def on_submit(workflowjson, value):
+              workflowjson["65"]["inputs"]["seed"] = value
+        on_default: |
+          def on_default(workflowjson):
+              import random
+              workflowjson["65"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
+```
+
+You can use the following configurations:
+
+| Name          | Type                           | Description                                                                                                                                                             | Required |
+|---------------|--------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| `name`        | `string`                       | Name of the form field                                                                                                                                                  | Yes      |
+| `type`        | `text \| resolution \| select` | Type of the form field                                                                                                                                                  | Yes      |
+| `required`    | `boolean`                      | Whether the field is required                                                                                                                                           | No       |
+| `description` | `string`                       | Description of the field (will be displayed in Discord client)                                                                                                          | No       |
+| `message`     | `string`                       | Message to display when asking for the field (will be displayed in Discord client)                                                                                      | No       |
+| `on_submit`   | `string`                       | Code to execute when the form is submitted (will pass the provided data), method name should be always called `on_submit` to be executed                                | Yes      |
+| `on_default`  | `string`                       | If field is not required and no data is provided for given field this method is called so you can always set default value. Method name need to always be `on_default`. | No       |
+
 ## 🔒 Security
 
 Configure access control for workflows and settings:
@@ -142,16 +199,16 @@ workflows:
   forge:
     security:
       enabled: true
-      allowed_roles: ["Smith"]
-      allowed_users: ["Smith123"]
-      
-# Setting security
-- name: hd
-  security:
-    enabled: true
-    allowed_roles: ["Smith"]
-    allowed_users: ["Smith123"]
-  code: "..."
+      allowed_roles: [ "Smith" ]
+      allowed_users: [ "Smith123" ]
+
+    # Setting security
+    - name: hd
+      security:
+        enabled: true
+        allowed_roles: [ "Smith" ]
+        allowed_users: [ "Smith123" ]
+      code: "..."
 ```
 
 ## 🔌 Plugin Development
@@ -161,11 +218,12 @@ Create custom plugins to extend functionality:
 ```python
 from src.core.plugin import Plugin
 
+
 class MyPlugin(Plugin):
     async def on_load(self):
         await super().on_load()
         self.bot.hook_manager.register_hook('is.comfyui.client.before_create', self.my_hook)
-        
+
     async def my_hook(self, workflow_json: dict, instances: list):
         return workflow_json
 ```
@@ -204,8 +262,10 @@ Licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## ⚠️ Disclaimer
 
-This bot is for educational and creative purposes. Users are responsible for ensuring their usage complies with ComfyUI's and Discord's terms of service.
+This bot is for educational and creative purposes. Users are responsible for ensuring their usage complies with
+ComfyUI's and Discord's terms of service.
 
 ## 💬 Community
 
-Join our [Discord server](https://discord.gg/9Ne74HPEue) to see the bot in action and stay updated with the latest developments!
+Join our [Discord server](https://discord.gg/9Ne74HPEue) to see the bot in action and stay updated with the latest
+developments!
