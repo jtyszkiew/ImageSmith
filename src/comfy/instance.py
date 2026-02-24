@@ -71,10 +71,21 @@ class ComfyUIInstance:
                 else:
                     ws_kwargs['ssl'] = True
 
-            self.ws = await websockets.connect(
-                f"{self.ws_url}/ws?clientId={self.client_id}",
-                **ws_kwargs
-            )
+            ws_retries = 5
+            ws_retry_delay = 3
+            for attempt in range(ws_retries):
+                try:
+                    self.ws = await websockets.connect(
+                        f"{self.ws_url}/ws?clientId={self.client_id}",
+                        **ws_kwargs
+                    )
+                    break
+                except Exception as ws_err:
+                    if attempt < ws_retries - 1:
+                        logger.warning(f"WebSocket connect attempt {attempt + 1}/{ws_retries} failed for {self.base_url}: {ws_err}, retrying in {ws_retry_delay}s...")
+                        await asyncio.sleep(ws_retry_delay)
+                    else:
+                        raise
 
             self.connected = True
             logger.info(f"Connected to ComfyUI instance at {self.base_url}")

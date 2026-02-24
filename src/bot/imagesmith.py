@@ -11,7 +11,6 @@ import discord
 from discord.ext import commands
 
 from logger import logger
-from tests.comfy.test_instance import instance
 from .commands import forge_command, reforge_command, upscale_command, workflows_command
 from ..comfy.load_balancer import LoadBalanceStrategy
 from ..comfy.workflow_manager import WorkflowManager
@@ -316,7 +315,15 @@ class ComfyUIBot(commands.Bot):
                     if modified_workflow_json is None:
                         return  # Form processing failed or timed out
 
-                    result = await self.comfy_client.generate(workflow_json, instance)
+                    async def status_update(status_text: str):
+                        new_embed = message.embeds[0].copy()
+                        for i, field in enumerate(new_embed.fields):
+                            if field.name == "Status":
+                                new_embed.set_field_at(i, name="Status", value=status_text, inline=False)
+                                break
+                        await message.edit(embed=new_embed)
+
+                    result = await self.comfy_client.generate(workflow_json, instance, status_callback=status_update)
 
                     if 'error' in result:
                         raise Exception(result['error'])

@@ -55,6 +55,10 @@ class ComfyUIClient:
         connect_tasks = [instance.initialize() for instance in self.instances]
         results = await asyncio.gather(*connect_tasks, return_exceptions=True)
 
+        for instance, result in zip(self.instances, results):
+            if isinstance(result, Exception):
+                logger.error(f"Failed to initialize instance {instance.base_url}: {result}")
+
         connected_instances = sum(1 for instance in self.instances if instance.connected)
         if connected_instances == 0:
             raise Exception("Failed to connect to any ComfyUI instance")
@@ -77,9 +81,9 @@ class ComfyUIClient:
             cleanup_tasks = [instance.cleanup() for instance in self.instances]
             await asyncio.gather(*cleanup_tasks, return_exceptions=True)
 
-    async def generate(self, workflow: dict, instance: ComfyUIInstance = None) -> dict:
+    async def generate(self, workflow: dict, instance: ComfyUIInstance = None, status_callback=None) -> dict:
         if not instance:
-            instance = await self.load_balancer.get_instance()
+            instance = await self.load_balancer.get_instance(status_callback=status_callback)
 
         async with instance.lock:
             try:

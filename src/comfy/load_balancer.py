@@ -52,7 +52,7 @@ class LoadBalancer:
         return min(connected_instances,
                    key=lambda i: i.active_generations / i.weight)
 
-    async def _select_instance(self) -> ComfyUIInstance:
+    async def _select_instance(self, status_callback=None) -> ComfyUIInstance:
         strategies = {
             LoadBalanceStrategy.ROUND_ROBIN: self._select_instance_round_robin,
             LoadBalanceStrategy.RANDOM: self._select_instance_random,
@@ -66,7 +66,7 @@ class LoadBalancer:
             for instance in self.instances:
                 if not instance.connected and not instance.active_prompts:
                     logger.info(f"Attempting to reconnect to instance {instance.base_url}")
-                    await self.hook_manager.execute_hook('is.comfyui.client.instance.reconnect', instance.base_url)
+                    await self.hook_manager.execute_hook('is.comfyui.client.instance.reconnect', instance.base_url, status_callback=status_callback)
                     await instance.initialize()
 
             available_instances = [i for i in self.instances if i.connected]
@@ -76,7 +76,7 @@ class LoadBalancer:
         self.instances = available_instances
         return strategies[self.strategy]()
 
-    async def get_instance(self) -> ComfyUIInstance:
-        instance = await self._select_instance()
+    async def get_instance(self, status_callback=None) -> ComfyUIInstance:
+        instance = await self._select_instance(status_callback=status_callback)
         await instance.mark_used()
         return instance
