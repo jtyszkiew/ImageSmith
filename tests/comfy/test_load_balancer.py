@@ -118,7 +118,8 @@ class TestLoadBalancer:
         # Verify reconnection attempt
         mock_hook_manager.execute_hook.assert_called_once_with(
             'is.comfyui.client.instance.reconnect',
-            'http://test:8188'
+            'http://test:8188',
+            status_callback=None
         )
         instance.initialize.assert_called_once()
 
