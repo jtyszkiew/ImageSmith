@@ -17,7 +17,7 @@ from ..comfy.workflow_manager import WorkflowManager
 from ..core.form import DynamicFormManager
 from ..core.hook_manager import HookManager
 from ..core.generation_queue import GenerationQueue
-from ..comfy.client import ComfyUIClient
+from ..comfy.client import ComfyUIClient, InstanceInterruptedError
 from ..core.security import SecurityManager, BasicSecurity, SecurityResult
 
 
@@ -323,15 +323,6 @@ class ComfyUIBot(commands.Bot):
                                 break
                         await message.edit(embed=new_embed)
 
-                    result = await self.comfy_client.generate(workflow_json, instance, status_callback=status_update)
-
-                    if 'error' in result:
-                        raise Exception(result['error'])
-
-                    prompt_id = result.get('prompt_id')
-                    if not prompt_id:
-                        raise Exception("No prompt ID received from ComfyUI")
-
                     async def update_message(status: str, image_file: Optional[discord.File] = None):
                         new_embed = message.embeds[0].copy()
 
@@ -345,7 +336,40 @@ class ComfyUIBot(commands.Bot):
                         else:
                             await message.edit(embed=new_embed)
 
-                    await self.comfy_client.listen_for_updates(prompt_id, update_message)
+                    max_retries = 1
+                    current_instance = instance
+                    current_workflow = workflow_json
+
+                    for attempt in range(max_retries + 1):
+                        try:
+                            result = await self.comfy_client.generate(current_workflow, current_instance, status_callback=status_update)
+
+                            if 'error' in result:
+                                raise Exception(result['error'])
+
+                            prompt_id = result.get('prompt_id')
+                            if not prompt_id:
+                                raise Exception("No prompt ID received from ComfyUI")
+
+                            await self.comfy_client.listen_for_updates(prompt_id, update_message)
+                            break
+
+                        except InstanceInterruptedError as e:
+                            if attempt >= max_retries:
+                                raise Exception(f"Generation failed after instance interruption: {e}")
+
+                            logger.warning(f"Instance interrupted (attempt {attempt + 1}), retrying...")
+                            await status_update("⚠️ Instance interrupted, retrying...")
+
+                            current_instance = None
+                            if input_image_file:
+                                uploaded = await self.comfy_client.upload_image(input_image_file)
+                                current_image = uploaded[0]
+                                current_instance = uploaded[1]
+                                current_workflow = self.workflow_manager.prepare_workflow(
+                                    workflow_name, prompt, settings, current_image,
+                                    Image.open(io.BytesIO(input_image_file)),
+                                )
 
                 except Exception as e:
                     logger.error(e, exc_info=True)

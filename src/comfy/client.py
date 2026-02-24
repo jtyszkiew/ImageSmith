@@ -19,6 +19,11 @@ from src.comfy.load_balancer import LoadBalanceStrategy, LoadBalancer
 TRANSIENT_STATUS_CODES = {502, 503, 504}
 
 
+class InstanceInterruptedError(Exception):
+    """Raised when a ComfyUI instance connection is lost during generation (e.g. spot preemption)."""
+    pass
+
+
 class ComfyUIClient:
     def __init__(
             self,
@@ -99,30 +104,35 @@ class ComfyUIClient:
                 max_retries = 3
                 retry_delay = 2
 
-                for attempt in range(max_retries + 1):
-                    async with session.post(
-                            f"{instance.base_url}/prompt",
-                            json=prompt_data
-                    ) as response:
-                        if response.status == 200:
-                            result = await response.json()
-                            prompt_id = result.get('prompt_id')
-                            if prompt_id:
-                                instance.active_prompts.add(prompt_id)
-                                self.prompt_to_instance[prompt_id] = instance
-                            instance.total_generations += 1
-                            return result
+                try:
+                    for attempt in range(max_retries + 1):
+                        async with session.post(
+                                f"{instance.base_url}/prompt",
+                                json=prompt_data
+                        ) as response:
+                            if response.status == 200:
+                                result = await response.json()
+                                prompt_id = result.get('prompt_id')
+                                if prompt_id:
+                                    instance.active_prompts.add(prompt_id)
+                                    self.prompt_to_instance[prompt_id] = instance
+                                instance.total_generations += 1
+                                return result
 
-                        error_text = await response.text()
-                        is_transient = (
-                            response.status in TRANSIENT_STATUS_CODES
-                            or (response.status == 404 and not error_text.strip())
-                        )
-                        if is_transient and attempt < max_retries:
-                            logger.warning(f"Transient error (status {response.status}), retrying in {retry_delay * 2**attempt}s...")
-                            await asyncio.sleep(retry_delay * (2 ** attempt))
-                            continue
-                        raise Exception(f"Generation request failed with status {response.status}: {error_text}")
+                            error_text = await response.text()
+                            is_transient = (
+                                response.status in TRANSIENT_STATUS_CODES
+                                or (response.status == 404 and not error_text.strip())
+                            )
+                            if is_transient and attempt < max_retries:
+                                logger.warning(f"Transient error (status {response.status}), retrying in {retry_delay * 2**attempt}s...")
+                                await asyncio.sleep(retry_delay * (2 ** attempt))
+                                continue
+                            raise Exception(f"Generation request failed with status {response.status}: {error_text}")
+                except (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError,
+                        aiohttp.ClientOSError, ConnectionError) as e:
+                    instance.connected = False
+                    raise InstanceInterruptedError(f"Connection to {instance.base_url} lost: {e}") from e
 
             finally:
                 instance.active_generations -= 1
@@ -290,9 +300,9 @@ class ComfyUIClient:
                         raise Exception(f"ComfyUI Error: {error_msg}")
 
                 except websockets.ConnectionClosed:
-                    logger.error("WebSocket connection closed unexpectedly")
-                    await message_callback("❌ Connection closed unexpectedly")
-                    raise
+                    logger.warning("WebSocket connection closed - instance may have been interrupted")
+                    instance.connected = False
+                    raise InstanceInterruptedError(f"Instance {instance.base_url} connection lost during generation")
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse WebSocket message: {e}")
                     continue
