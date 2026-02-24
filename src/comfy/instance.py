@@ -49,9 +49,9 @@ class ComfyUIInstance:
 
             async with session.get(f"{self.base_url}/history") as response:
                 if response.status == 401:
-                    raise logger.error(f"Authentication failed for ComfyUI instance {self.base_url}")
+                    raise Exception(f"Authentication failed for ComfyUI instance {self.base_url}")
                 elif response.status != 200:
-                    raise logger.error(f"Failed to connect to ComfyUI API: {response.status}")
+                    raise Exception(f"Failed to connect to ComfyUI API: {response.status}")
 
             ws_headers = {}
             if self.auth and self.auth.api_key:
@@ -63,7 +63,13 @@ class ComfyUIInstance:
             }
 
             if self.ws_url.startswith('wss://'):
-                ws_kwargs['ssl'] = self.auth.ssl_verify if self.auth else True
+                if self.auth and not self.auth.ssl_verify:
+                    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    ws_kwargs['ssl'] = ssl_context
+                else:
+                    ws_kwargs['ssl'] = True
 
             self.ws = await websockets.connect(
                 f"{self.ws_url}/ws?clientId={self.client_id}",
@@ -76,7 +82,7 @@ class ComfyUIInstance:
         except Exception as e:
             self.connected = False
             await self.cleanup()
-            raise logger.error(f"Failed to connect to ComfyUI instance {self.base_url}: {e}")
+            raise Exception(f"Failed to connect to ComfyUI instance {self.base_url}: {e}")
 
     async def mark_used(self):
         """Mark the instance as recently used"""

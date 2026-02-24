@@ -19,7 +19,7 @@ class GenerationState:
         embed.add_field(name="Creator", value=self.interaction.user.mention, inline=True)
         embed.add_field(name="Workflow", value=self.workflow_name, inline=True)
         if self.prompt:
-            embed.add_field(name="Prompt", value=self.prompt, inline=False)
+            embed.add_field(name="Prompt", value=self.prompt[:1021] + "..." if len(self.prompt) > 1024 else self.prompt, inline=False)
         if self.settings:
             embed.add_field(name="Settings", value=f"```{self.settings}```", inline=False)
         embed.add_field(name="Status", value=self.current_status, inline=False)

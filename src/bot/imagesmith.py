@@ -280,7 +280,7 @@ class ComfyUIBot(commands.Bot):
             embed.add_field(name="Creator", value=interaction.user.mention, inline=True)
             embed.add_field(name="Workflow", value=workflow_name, inline=True)
             if prompt:
-                embed.add_field(name="Prompt", value=prompt, inline=False)
+                embed.add_field(name="Prompt", value=prompt[:1021] + "..." if len(prompt) > 1024 else prompt, inline=False)
             if settings:
                 embed.add_field(name="Settings", value=f"```{settings}```", inline=False)
 
