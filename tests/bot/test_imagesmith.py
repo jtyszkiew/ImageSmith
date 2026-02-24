@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 import yaml
 from unittest.mock import Mock, AsyncMock, patch
 
@@ -27,7 +28,7 @@ class TestComfyUIBot:
             yaml.dump(config, f)
         return str(config_file)
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def bot(self, mock_config, tmp_path):
         """Create a bot instance with mocked parent class and dependencies"""
         with patch('src.comfy.workflow_manager.WorkflowManager._load_config') as mock_wm:
@@ -58,7 +59,7 @@ class TestComfyUIBot:
     @pytest.mark.asyncio
     async def test_bot_initialization(self, bot):
         """Test bot initialization and intents configuration"""
-        bot = await anext(bot)
+
 
         # Basic attribute checks
         assert bot.workflow_manager is not None
@@ -70,7 +71,7 @@ class TestComfyUIBot:
     @pytest.mark.asyncio
     async def test_setup_hook(self, bot):
         """Test setup hook functionality"""
-        bot = await anext(bot)
+
 
         # Create mock ComfyUIClient
         mock_client = AsyncMock()
@@ -105,7 +106,7 @@ class TestComfyUIBot:
     @pytest.mark.asyncio
     async def test_setup_hook_comfy_connection_failure(self, bot):
         """Test setup hook handling ComfyUI connection failure"""
-        bot = await anext(bot)
+
 
         mock_client = AsyncMock()
         mock_client.connect.side_effect = Exception("Connection failed")
@@ -122,7 +123,7 @@ class TestComfyUIBot:
     @pytest.mark.asyncio
     async def test_setup_hook_command_sync_failure(self, bot):
         """Test setup hook handling command sync failure"""
-        bot = await anext(bot)
+
 
         mock_client = AsyncMock()
         mock_client.connect = AsyncMock()
@@ -139,7 +140,7 @@ class TestComfyUIBot:
 
     @pytest.mark.asyncio
     async def test_load_plugins(self, bot, tmp_path):
-        bot = await anext(bot)
+
         # Create temporary plugin
         plugins_dir = tmp_path / "plugins"
         plugins_dir.mkdir()
@@ -162,7 +163,7 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_handle_generation(self, bot):
-        bot = await anext(bot)
+
         # Mock interaction
         interaction = AsyncMock()
         interaction.user = Mock()
@@ -179,7 +180,7 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_handle_generation_security_failure(self, bot):
-        bot = await anext(bot)
+
         # Mock interaction
         interaction = AsyncMock()
 
@@ -203,7 +204,7 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_handle_generation_with_image(self, bot):
-        bot = await anext(bot)
+
         # Mock interaction and attachment
         interaction = AsyncMock()
         interaction.user = Mock()
@@ -225,7 +226,7 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_handle_invalid_workflow(self, bot):
-        bot = await anext(bot)
+
         # Mock interaction
         interaction = AsyncMock()
 
@@ -244,7 +245,7 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_handle_workflow_type_mismatch(self, bot):
-        bot = await anext(bot)
+
         # Mock interaction
         interaction = AsyncMock()
 
@@ -263,7 +264,7 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_cleanup(self, bot):
-        bot = await anext(bot)
+
         # Mock ComfyUI client
         bot.comfy_client = AsyncMock()
 

@@ -271,6 +271,126 @@ class TestComfyUIClient:
 
 
 
+class MockPostSequence:
+    """Returns different responses on successive calls."""
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.call_count = 0
+
+    def __call__(self, *args, **kwargs):
+        resp = self.responses[min(self.call_count, len(self.responses) - 1)]
+        self.call_count += 1
+        return MockAsyncContextManager(resp)
+
+
+class TestGenerateRetry:
+    @pytest.fixture
+    def success_response(self):
+        response = AsyncMock()
+        response.status = 200
+        response.json = AsyncMock(return_value={'prompt_id': 'test_prompt'})
+        return response
+
+    @pytest.fixture
+    def mock_instance(self):
+        instance = AsyncMock()
+        instance.client_id = 'test_id'
+        instance.connected = True
+        instance.active_generations = 0
+        instance._lock = asyncio.Lock()
+        instance.base_url = 'http://localhost:8188'
+        return instance
+
+    @pytest.fixture
+    def mocked_client(self, mock_instance):
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        client.instances = [mock_instance]
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
+        return client
+
+    @pytest.mark.asyncio
+    async def test_generate_retries_on_transient_404(self, mocked_client, mock_instance, success_response):
+        """404 with empty body should be retried, then succeed on 200."""
+        empty_404 = AsyncMock()
+        empty_404.status = 404
+        empty_404.text = AsyncMock(return_value="")
+
+        session = AsyncMock()
+        session.post = MockPostSequence([empty_404, success_response])
+        mock_instance.get_session.return_value = session
+
+        result = await mocked_client.generate({'test': 'workflow'})
+        assert result == {'prompt_id': 'test_prompt'}
+        assert session.post.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_generate_retries_on_502(self, mocked_client, mock_instance, success_response):
+        """502 should be retried, then succeed on 200."""
+        bad_gateway = AsyncMock()
+        bad_gateway.status = 502
+        bad_gateway.text = AsyncMock(return_value="Bad Gateway")
+
+        session = AsyncMock()
+        session.post = MockPostSequence([bad_gateway, success_response])
+        mock_instance.get_session.return_value = session
+
+        result = await mocked_client.generate({'test': 'workflow'})
+        assert result == {'prompt_id': 'test_prompt'}
+        assert session.post.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_generate_no_retry_on_404_with_body(self, mocked_client, mock_instance):
+        """404 with a non-empty body is an application error — no retry."""
+        not_found = AsyncMock()
+        not_found.status = 404
+        not_found.text = AsyncMock(return_value="Not Found: /prompt")
+
+        session = AsyncMock()
+        session.post = MockPostSequence([not_found])
+        mock_instance.get_session.return_value = session
+
+        with pytest.raises(Exception) as exc_info:
+            await mocked_client.generate({'test': 'workflow'})
+
+        assert "404" in str(exc_info.value)
+        assert session.post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_generate_no_retry_on_400(self, mocked_client, mock_instance):
+        """400 is an application error — no retry."""
+        bad_request = AsyncMock()
+        bad_request.status = 400
+        bad_request.text = AsyncMock(return_value="Bad Request")
+
+        session = AsyncMock()
+        session.post = MockPostSequence([bad_request])
+        mock_instance.get_session.return_value = session
+
+        with pytest.raises(Exception) as exc_info:
+            await mocked_client.generate({'test': 'workflow'})
+
+        assert "400" in str(exc_info.value)
+        assert session.post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_generate_exhausts_retries(self, mocked_client, mock_instance):
+        """Always 404 empty body — should fail after max retries (4 attempts total)."""
+        empty_404 = AsyncMock()
+        empty_404.status = 404
+        empty_404.text = AsyncMock(return_value="")
+
+        session = AsyncMock()
+        session.post = MockPostSequence([empty_404, empty_404, empty_404, empty_404])
+        mock_instance.get_session.return_value = session
+
+        with pytest.raises(Exception) as exc_info:
+            await mocked_client.generate({'test': 'workflow'})
+
+        assert "404" in str(exc_info.value)
+        assert session.post.call_count == 4  # 1 initial + 3 retries
+
+
 class TestComfyUIClientImageUpload:
     @pytest.fixture
     def mock_response(self):

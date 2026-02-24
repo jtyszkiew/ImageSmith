@@ -105,7 +105,7 @@ class TestComfyUIInstance:
 
         with patch('aiohttp.ClientSession', return_value=mock_session), \
                 patch('logger.logger', mock_logger):
-            with pytest.raises(TypeError, match="exceptions must derive from BaseException"):
+            with pytest.raises(Exception, match="Authentication failed"):
                 await instance.initialize()
 
         assert instance.connected is False
@@ -132,7 +132,11 @@ class TestComfyUIInstance:
         mock_ws_connect.assert_called_once()
         ws_kwargs = mock_ws_connect.call_args[1]
         assert 'ssl' in ws_kwargs
-        assert ws_kwargs['ssl'] is False  # Should use auth.ssl_verify value
+        # When ssl_verify=False, code creates an SSLContext with verification disabled
+        ssl_ctx = ws_kwargs['ssl']
+        assert isinstance(ssl_ctx, ssl.SSLContext)
+        assert ssl_ctx.check_hostname is False
+        assert ssl_ctx.verify_mode == ssl.CERT_NONE
 
     @pytest.mark.asyncio
     async def test_cleanup(self, instance, mock_session, mock_websocket):
