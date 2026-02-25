@@ -136,6 +136,11 @@ class ComfyUIClient:
                                 logger.warning(f"Transient error (status {response.status}), retrying in {retry_delay * 2**attempt}s...")
                                 await asyncio.sleep(retry_delay * (2 ** attempt))
                                 continue
+                            if is_transient:
+                                instance.connected = False
+                                raise InstanceInterruptedError(
+                                    f"Instance {instance.base_url} unreachable (status {response.status} after {max_retries} retries)"
+                                )
                             raise Exception(f"Generation request failed with status {response.status}: {error_text}")
                 except (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError,
                         aiohttp.ClientOSError, ConnectionError) as e:
