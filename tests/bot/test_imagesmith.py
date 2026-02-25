@@ -277,6 +277,54 @@ class TestPlugin(Plugin):
         assert "not a img2img workflow" in embed.description
 
     @pytest.mark.asyncio
+    async def test_register_commands_with_custom_names(self, tmp_path):
+        """Test that custom command names from config are registered"""
+        with patch('src.comfy.workflow_manager.WorkflowManager._load_config') as mock_wm:
+            mock_wm.return_value = {
+                'comfyui': {
+                    'instances': [{
+                        'url': 'http://localhost:8188'
+                    }]
+                },
+                'workflows': {
+                    'test_workflow': {
+                        'type': 'txt2img',
+                        'workflow': 'test.json',
+                        'default': True
+                    }
+                },
+                'commands': {
+                    'forge': 'generate',
+                    'reforge': 'remix',
+                }
+            }
+
+            bot = ImageSmith(plugins_path=f"{tmp_path}/plugins")
+
+            try:
+                mock_client = AsyncMock()
+                mock_client.connect = AsyncMock()
+
+                with patch('src.bot.imagesmith.ComfyUIClient', return_value=mock_client), \
+                        patch.object(bot, 'load_plugins', new_callable=AsyncMock), \
+                        patch.object(bot.tree, 'add_command') as mock_add_command, \
+                        patch.object(bot.tree, 'sync'), \
+                        patch('sys.exit'):
+                    await bot.setup_hook()
+
+                    command_calls = bot.tree.add_command.call_args_list
+                    registered_commands = [call.args[0].name for call in command_calls]
+
+                    assert 'generate' in registered_commands
+                    assert 'remix' in registered_commands
+                    assert 'upscale' in registered_commands
+                    assert 'workflows' in registered_commands
+                    assert 'forge' not in registered_commands
+                    assert 'reforge' not in registered_commands
+            finally:
+                await bot.cleanup()
+
+    @pytest.mark.asyncio
     async def test_cleanup(self, bot):
 
         # Mock ComfyUI client

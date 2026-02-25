@@ -3,7 +3,7 @@ import pytest
 import discord
 from unittest.mock import Mock, AsyncMock
 
-from src.bot.commands import forge_command, reforge_command, workflows_command
+from src.bot.commands import forge_command, reforge_command, upscale_command, workflows_command
 
 
 class TestImageCommands:
@@ -94,3 +94,23 @@ class TestImageCommands:
         embed = mock_interaction.response.send_message.call_args[1]['embed']
         assert isinstance(embed, discord.Embed)
         assert "workflow1" in embed.fields[0].value
+
+    def test_forge_command_custom_name(self, mock_bot):
+        command = forge_command(mock_bot, name="generate")
+        assert command.name == "generate"
+
+    def test_reforge_command_custom_name(self, mock_bot):
+        command = reforge_command(mock_bot, name="remix")
+        assert command.name == "remix"
+
+    def test_upscale_command_custom_name(self, mock_bot):
+        command = upscale_command(mock_bot, name="enhance")
+        assert command.name == "enhance"
+
+    def test_workflows_command_custom_name(self, mock_bot):
+        command = workflows_command(mock_bot, name="list")
+        assert command.name == "list"
+
+    def test_forge_command_default_name(self, mock_bot):
+        command = forge_command(mock_bot)
+        assert command.name == "forge"

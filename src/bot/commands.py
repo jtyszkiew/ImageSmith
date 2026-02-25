@@ -12,11 +12,11 @@ from ..ui.embeds import (
 )
 
 
-def forge_command(bot):
+def forge_command(bot, name="forge"):
     """Create the forge command for txt2img generation"""
 
     @app_commands.command(
-        name="forge",
+        name=name,
         description=i18n.get("command.forge.description")
     )
     @app_commands.describe(
@@ -35,11 +35,11 @@ def forge_command(bot):
     return forge
 
 
-def reforge_command(bot):
+def reforge_command(bot, name="reforge"):
     """Create the reforge command for img2img generation"""
 
     @app_commands.command(
-        name="reforge",
+        name=name,
         description=i18n.get("command.reforge.description")
     )
     @app_commands.describe(
@@ -60,11 +60,11 @@ def reforge_command(bot):
     return reforge
 
 
-def upscale_command(bot):
+def upscale_command(bot, name="upscale"):
     """Create the upscale command"""
 
     @app_commands.command(
-        name="upscale",
+        name=name,
         description=i18n.get("command.upscale.description")
     )
     @app_commands.describe(
@@ -85,10 +85,10 @@ def upscale_command(bot):
     return upscale
 
 
-def workflows_command(bot):
+def workflows_command(bot, name="workflows"):
     """Create the workflows command"""
     @app_commands.command(
-        name="workflows",
+        name=name,
         description=i18n.get("command.workflows.description")
     )
     @app_commands.describe(

@@ -190,6 +190,25 @@ You can use the following configurations:
 | `on_submit`   | `string`                       | Code to execute when the form is submitted (will pass the provided data), method name should be always called `on_submit` to be executed                                | Yes      |
 | `on_default`  | `string`                       | If field is not required and no data is provided for given field this method is called so you can always set default value. Method name need to always be `on_default`. | No       |
 
+### Custom Command Names
+
+Rename the default slash commands to whatever you prefer:
+
+```yaml
+commands:
+  forge: "generate"
+  reforge: "remix"
+  upscale: "enhance"
+  workflows: "list"
+```
+
+Any key omitted keeps its default name. For example, to only rename `/forge` to `/generate`:
+
+```yaml
+commands:
+  forge: "generate"
+```
+
 ### ComfyUI Display Settings
 
 ```yaml

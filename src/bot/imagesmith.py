@@ -102,10 +102,12 @@ class ImageSmith(commands.Bot):
         """Register Discord commands and sync the command tree"""
         logger.info("Registering commands...")
 
-        self.tree.add_command(forge_command(self))
-        self.tree.add_command(reforge_command(self))
-        self.tree.add_command(upscale_command(self))
-        self.tree.add_command(workflows_command(self))
+        command_names = self.workflow_manager.config.get('commands', {})
+
+        self.tree.add_command(forge_command(self, name=command_names.get('forge', 'forge')))
+        self.tree.add_command(reforge_command(self, name=command_names.get('reforge', 'reforge')))
+        self.tree.add_command(upscale_command(self, name=command_names.get('upscale', 'upscale')))
+        self.tree.add_command(workflows_command(self, name=command_names.get('workflows', 'workflows')))
 
         commands = await self.tree.sync()
         logger.info(f"Registered {len(commands)} Discord commands:")
