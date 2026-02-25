@@ -2,7 +2,7 @@ from typing import Optional
 import discord
 
 from logger import logger
-from src.core.i18n import i18n
+from .i18n import i18n
 
 
 class SecurityResult:

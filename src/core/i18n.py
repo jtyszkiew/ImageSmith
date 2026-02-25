@@ -40,11 +40,17 @@ class I18n:
 
         # Layer 2: language file
         if language:
-            lang_path = os.path.splitext(defaults_path)
-            lang_file = f"{lang_path[0]}.{language}{lang_path[1]}"
+            defaults_dir = os.path.dirname(os.path.abspath(defaults_path))
+            base_name = os.path.basename(defaults_path)
+            lang_parts = os.path.splitext(base_name)
+            lang_file = os.path.join(defaults_dir, f"{lang_parts[0]}.{language}{lang_parts[1]}")
+            logger.info(f"Loading language file: {lang_file}")
             lang_data = self._load_yaml(lang_file)
             if lang_data:
                 self._data = _deep_merge(self._data, lang_data)
+                logger.info(f"Language '{language}' loaded successfully")
+            else:
+                logger.warning(f"Language '{language}' file was empty or not found")
 
         # Layer 3: user overrides from configuration.yml
         if overrides and isinstance(overrides, dict):
@@ -57,6 +63,7 @@ class I18n:
                 data = yaml.safe_load(f)
                 return data if isinstance(data, dict) else {}
         except FileNotFoundError:
+            logger.warning(f"Strings file not found: '{path}'")
             return {}
         except Exception as e:
             logger.warning(f"Failed to load strings file '{path}': {e}")

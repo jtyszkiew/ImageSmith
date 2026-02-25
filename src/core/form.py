@@ -6,7 +6,7 @@ import discord
 from discord import ui
 
 from logger import logger
-from src.core.i18n import i18n
+from .i18n import i18n
 
 
 @dataclass

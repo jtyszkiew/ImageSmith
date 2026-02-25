@@ -97,6 +97,7 @@ command:
   upscale:
     description: "Powiększ istniejący obraz"
     image_desc: "Obraz do powiększenia"
+    prompt_desc: "Opis lub prompt do powiększania (opcjonalnie)"
     workflow_desc: "Przepływ pracy do użycia (opcjonalnie)"
     settings_desc: "Dodatkowe ustawienia (opcjonalnie)"
   workflows:

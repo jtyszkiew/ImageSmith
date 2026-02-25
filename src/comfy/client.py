@@ -11,9 +11,9 @@ import urllib.parse
 from PIL import Image
 
 from logger import logger
-from src.comfy.instance import ComfyUIInstance, ComfyUIAuth
-from src.comfy.load_balancer import LoadBalanceStrategy, LoadBalancer
-from src.core.i18n import i18n
+from .instance import ComfyUIInstance, ComfyUIAuth
+from .load_balancer import LoadBalanceStrategy, LoadBalancer
+from ..core.i18n import i18n
 
 
 TRANSIENT_STATUS_CODES = {502, 503, 504}

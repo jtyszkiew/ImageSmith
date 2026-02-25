@@ -1,6 +1,6 @@
 import discord
 
-from src.core.i18n import i18n
+from ..core.i18n import i18n
 from .buttons import ImageButton
 
 

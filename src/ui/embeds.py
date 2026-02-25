@@ -2,7 +2,7 @@ from typing import Optional
 
 import discord
 
-from src.core.i18n import i18n
+from ..core.i18n import i18n
 
 COLOR_DEFAULT = 0x2F3136
 COLOR_ERROR = 0xFF0000

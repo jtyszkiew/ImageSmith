@@ -1,8 +1,8 @@
 from enum import Enum
 import random
 from logger import logger
-from src.comfy.instance import ComfyUIInstance
-from src.core.hook_manager import HookManager
+from .instance import ComfyUIInstance
+from ..core.hook_manager import HookManager
 
 
 class LoadBalanceStrategy(Enum):
