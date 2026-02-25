@@ -1,9 +1,8 @@
 import io
-import struct
 import urllib
 
 import discord
-from typing import List, Dict
+from typing import List, Dict, Optional
 import aiohttp
 import websockets
 import json
@@ -14,6 +13,7 @@ from PIL import Image
 from logger import logger
 from src.comfy.instance import ComfyUIInstance, ComfyUIAuth
 from src.comfy.load_balancer import LoadBalanceStrategy, LoadBalancer
+from src.core.i18n import i18n
 
 
 TRANSIENT_STATUS_CODES = {502, 503, 504}
@@ -25,11 +25,18 @@ class InstanceInterruptedError(Exception):
 
 
 class ComfyUIClient:
+    _MEDIA_TYPES = [
+        {"key": "images", "string_key": "client.media.image_generated"},
+        {"key": "gifs",   "string_key": "client.media.video_generated"},
+        {"key": "audio",  "string_key": "client.media.audio_generated"},
+    ]
+
     def __init__(
             self,
             instances_config: List[Dict],
             hook_manager=None,
             load_balancer_strategy=LoadBalanceStrategy.LEAST_BUSY,
+            show_node_updates: bool = True,
     ):
         self.instances: List[ComfyUIInstance] = []
         self.load_balancer = LoadBalancer(self.instances, load_balancer_strategy, hook_manager)
@@ -38,6 +45,7 @@ class ComfyUIClient:
         self.hook_manager = hook_manager
         self.timeout_check_task = None
         self.timeout_check_interval = 5
+        self.show_node_updates = show_node_updates
 
         for instance_config in instances_config:
             auth = None
@@ -164,139 +172,64 @@ class ComfyUIClient:
 
     async def listen_for_updates(self, prompt_id: str, message_callback):
         """Listen for updates about a specific generation"""
-        # Find instance handling this prompt
         instance = self.prompt_to_instance.get(prompt_id)
         if not instance or not instance.connected:
             raise Exception(f"No connected instance found for prompt {prompt_id}")
 
         milestones = [25, 50, 75, 100]
-        current_image_data = None
-        current_image_filename = None
+        current_media_data = None
+        current_media_filename = None
         latest_preview_image = None
         generation_complete = False
+        generation_notified = False
         node_progress = {}
 
         try:
             while not generation_complete:
                 try:
                     message = await instance.ws.recv()
+
                     if isinstance(message, bytes):
-                        if len(message) <= 8:
-                            continue
-
-                        event_type = struct.unpack('>I', message[:4])[0]
-                        image_type = struct.unpack('>I', message[4:8])[0]
-                        image_data = message[8:]
-
-                        try:
-                            with Image.open(io.BytesIO(image_data)) as img:
-                                buffer = io.BytesIO()
-                                img.save(buffer, format="JPEG")
-                                buffer.seek(0)
-                                latest_preview_image = discord.File(buffer, filename="preview.jpg")
-                        except Exception as e:
-                            logger.error(f"Failed to decode preview image: {e}")
-
+                        preview = self._handle_binary_preview(message)
+                        if preview:
+                            latest_preview_image = preview
                         continue
 
                     data = json.loads(message)
-
                     msg_type = data.get('type')
                     msg_data = data.get('data', {})
 
                     if msg_data.get('prompt_id') != prompt_id:
                         continue
 
-                    # Handle different message types
                     if msg_type == 'progress':
-                        # Progress message handling
-                        node = msg_data.get('node')
-                        value = msg_data.get('value', 0)
-                        max_value = msg_data.get('max', 100)
-
-                        progress_percentage = (value / max_value) * 100
-
-                        if node_progress.get(node, {}).get('last_milestone') == 100 and progress_percentage < 100:
-                            node_progress[node] = {'last_milestone': 0}
-
-                        for milestone in milestones:
-                            if progress_percentage >= milestone > node_progress.get(node, {}).get('last_milestone', 0):
-                                node_progress[node] = {
-                                    'value': value,
-                                    'max': max_value,
-                                    'last_milestone': milestone
-                                }
-                                progress_bar = self._create_progress_bar(value, max_value)
-                                status = f"🔄 Processing node {node}...\n{progress_bar}"
-                                if latest_preview_image and not latest_preview_image.fp.closed:
-                                    await message_callback(status, latest_preview_image)
-                                else:
-                                    await message_callback(status, None)
+                        await self._handle_progress(
+                            msg_data, node_progress, milestones,
+                            latest_preview_image, message_callback,
+                        )
 
                     elif msg_type == 'executing':
-                        node_id = msg_data.get('node')
-                        if node_id:
-                            if node_id in node_progress:
-                                del node_progress[node_id]
-                            await message_callback(f"🔄 Processing node {node_id}...", None)
-                        else:
-                            generation_complete = True
-                            if prompt_id in instance.active_prompts:
-                                instance.active_prompts.remove(prompt_id)
-                            if prompt_id in self.prompt_to_instance:
-                                del self.prompt_to_instance[prompt_id]
-                            image_file = None
-                            if current_image_data:
-                                image_file = discord.File(
-                                    io.BytesIO(current_image_data),
-                                    filename=current_image_filename,
-                                )
-                            await message_callback("✅ Generation complete!", image_file)
+                        generation_complete, generation_notified = await self._handle_executing(
+                            msg_data, node_progress, message_callback,
+                            prompt_id, instance,
+                            current_media_data, current_media_filename,
+                            generation_notified,
+                        )
 
                     elif msg_type == 'executed':
                         node_output = msg_data.get('output')
-                        if node_output and isinstance(node_output, dict) and 'images' in node_output:
-                            for image_data in node_output['images']:
-                                if isinstance(image_data, dict) and 'filename' in image_data:
-                                    image_url = self._get_resource_url(instance, image_data)
-                                    if image_url:
-                                        async with instance.session.get(image_url) as response:
-                                            if response.status == 200:
-                                                current_image_data = await response.read()
-                                                current_image_filename = image_data.get('filename')
-
-                                                image_file = discord.File(
-                                                    io.BytesIO(current_image_data),
-                                                    filename=current_image_filename,
-                                                )
-                                                await message_callback("🖼 New image generated!", image_file)
-                        if node_output and isinstance(node_output, dict) and 'gifs' in node_output:
-                            for video_data in node_output['gifs']:
-                                if isinstance(video_data, dict) and 'filename' in video_data:
-                                    video_url = self._get_resource_url(instance, video_data)
-                                    if video_url:
-                                        async with instance.session.get(video_url) as response:
-                                            if response.status == 200:
-                                                current_image_data = await response.read()
-                                                current_image_filename = video_data.get('filename')
-
-                                                image_file = discord.File(
-                                                    io.BytesIO(current_image_data),
-                                                    filename=current_image_filename,
-                                                )
-                                                await message_callback("🎥 New video generated!", image_file)
+                        media_data, media_filename = await self._handle_executed(
+                            instance, node_output, message_callback,
+                        )
+                        if media_data:
+                            current_media_data = media_data
+                            current_media_filename = media_filename
 
                     elif msg_type == 'error':
                         error_msg = msg_data.get('error', 'Unknown error')
-                        if prompt_id in instance.active_prompts:
-                            instance.active_prompts.remove(prompt_id)
-                        if prompt_id in self.prompt_to_instance:
-                            del self.prompt_to_instance[prompt_id]
-
+                        self._cleanup_prompt(prompt_id, instance)
                         logger.error(f"ComfyUI Error: {error_msg}")
-
-                        # We don't want to expose the error message to the user
-                        await message_callback(f"❌ Error: ComfyUI Error, check logs for more information.")
+                        await message_callback(i18n.get("client.status.error_comfyui"))
                         raise Exception(f"ComfyUI Error: {error_msg}")
 
                 except websockets.ConnectionClosed:
@@ -308,15 +241,11 @@ class ComfyUIClient:
                     continue
                 except Exception as e:
                     logger.error(f"Error while listening for updates: {str(e)}")
-                    await message_callback(f"❌ Error: {str(e)}")
+                    await message_callback(i18n.get("client.status.error_generic", error=i18n.sanitize_error(str(e))))
                     raise
 
         finally:
-            # Clean up tracking on any exit
-            if prompt_id in instance.active_prompts:
-                instance.active_prompts.remove(prompt_id)
-            if prompt_id in self.prompt_to_instance:
-                del self.prompt_to_instance[prompt_id]
+            self._cleanup_prompt(prompt_id, instance)
 
     async def __aenter__(self):
         await self.connect()
@@ -327,8 +256,10 @@ class ComfyUIClient:
 
     def _create_progress_bar(self, value: int, max_value: int, length: int = 10) -> str:
         """Create a text-based progress bar"""
+        filled_char = i18n.get("client.progress.bar_filled")
+        empty_char = i18n.get("client.progress.bar_empty")
         filled = int(length * (value / max_value))
-        bar = '█' * filled + '░' * (length - filled)
+        bar = filled_char * filled + empty_char * (length - filled)
         percentage = int(100 * (value / max_value))
         return f"[{bar}] {percentage}%"
 
@@ -370,3 +301,115 @@ class ComfyUIClient:
         except Exception as e:
             logger.error(f"Error generating image URL: {e}")
             return None
+
+    def _cleanup_prompt(self, prompt_id: str, instance: ComfyUIInstance) -> None:
+        """Remove prompt from tracking structures."""
+        instance.active_prompts.discard(prompt_id)
+        self.prompt_to_instance.pop(prompt_id, None)
+
+    def _handle_binary_preview(self, message: bytes) -> Optional[discord.File]:
+        """Decode a binary WebSocket preview message into a discord.File."""
+        if len(message) <= 8:
+            return None
+
+        image_data = message[8:]
+
+        try:
+            with Image.open(io.BytesIO(image_data)) as img:
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG")
+                buffer.seek(0)
+                return discord.File(buffer, filename="preview.jpg")
+        except Exception as e:
+            logger.error(f"Failed to decode preview image: {e}")
+            return None
+
+    async def _download_media(self, instance, media_data: dict) -> Optional[tuple[bytes, str]]:
+        """Download a single media resource. Returns (raw_bytes, filename) or None."""
+        if not isinstance(media_data, dict) or 'filename' not in media_data:
+            return None
+
+        url = self._get_resource_url(instance, media_data)
+        if not url:
+            return None
+
+        async with instance.session.get(url) as response:
+            if response.status == 200:
+                raw = await response.read()
+                return (raw, media_data['filename'])
+            return None
+
+    async def _handle_executed(self, instance, node_output, message_callback) -> tuple[Optional[bytes], Optional[str]]:
+        """Process an 'executed' message, downloading any media outputs."""
+        last_data = None
+        last_filename = None
+
+        if not node_output or not isinstance(node_output, dict):
+            return None, None
+
+        for media_type in self._MEDIA_TYPES:
+            key = media_type["key"]
+            if key not in node_output:
+                continue
+            for item in node_output[key]:
+                result = await self._download_media(instance, item)
+                if result:
+                    raw_bytes, filename = result
+                    last_data = raw_bytes
+                    last_filename = filename
+                    media_file = discord.File(io.BytesIO(raw_bytes), filename=filename)
+                    await message_callback(i18n.get(media_type['string_key']), media_file)
+
+        return last_data, last_filename
+
+    async def _handle_progress(self, msg_data, node_progress, milestones, latest_preview_image, message_callback) -> None:
+        """Process a 'progress' message, emitting milestone callbacks."""
+        node = msg_data.get('node')
+        value = msg_data.get('value', 0)
+        max_value = msg_data.get('max', 100)
+
+        progress_percentage = (value / max_value) * 100
+
+        if node_progress.get(node, {}).get('last_milestone') == 100 and progress_percentage < 100:
+            node_progress[node] = {'last_milestone': 0}
+
+        for milestone in milestones:
+            if progress_percentage >= milestone > node_progress.get(node, {}).get('last_milestone', 0):
+                node_progress[node] = {
+                    'value': value,
+                    'max': max_value,
+                    'last_milestone': milestone
+                }
+                if self.show_node_updates:
+                    progress_bar = self._create_progress_bar(value, max_value)
+                    status = f"{i18n.get('client.progress.processing_node', node=node)}\n{progress_bar}"
+                    if latest_preview_image and not latest_preview_image.fp.closed:
+                        await message_callback(status, latest_preview_image)
+                    else:
+                        await message_callback(status, None)
+
+    async def _handle_executing(self, msg_data, node_progress, message_callback,
+                                prompt_id, instance,
+                                current_media_data, current_media_filename,
+                                generation_notified: bool = False) -> tuple[bool, bool]:
+        """Process an 'executing' message. Returns (complete, generation_notified)."""
+        node_id = msg_data.get('node')
+        if node_id:
+            if node_id in node_progress:
+                del node_progress[node_id]
+            if self.show_node_updates:
+                await message_callback(i18n.get("client.progress.processing_node", node=node_id), None)
+            elif not generation_notified:
+                await message_callback(i18n.get("client.status.generation_in_progress"), None)
+                generation_notified = True
+            return False, generation_notified
+
+        self._cleanup_prompt(prompt_id, instance)
+        image_file = None
+        if current_media_data:
+            image_file = discord.File(
+                io.BytesIO(current_media_data),
+                filename=current_media_filename,
+            )
+        await message_callback(i18n.get("client.status.generation_complete"), image_file)
+        return True, generation_notified

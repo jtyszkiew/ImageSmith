@@ -17,8 +17,15 @@ from ..comfy.workflow_manager import WorkflowManager
 from ..core.form import DynamicFormManager
 from ..core.hook_manager import HookManager
 from ..core.generation_queue import GenerationQueue
+from ..core.i18n import i18n
 from ..comfy.client import ComfyUIClient, InstanceInterruptedError
 from ..core.security import SecurityManager, BasicSecurity, SecurityResult
+from ..ui.embeds import (
+    error_embed,
+    generation_error_embed,
+    generation_status_embed,
+    update_status_field,
+)
 
 
 class ComfyUIBot(commands.Bot):
@@ -33,6 +40,14 @@ class ComfyUIBot(commands.Bot):
         super().__init__(command_prefix='/', intents=intents)
 
         self.workflow_manager = WorkflowManager(configuration_path)
+
+        config = self.workflow_manager.config
+        i18n.load(
+            overrides=config.get('i18n'),
+            language=config.get('language'),
+            env=config.get('env', 'prod'),
+        )
+
         self.security_manager = SecurityManager()
         self.hook_manager = HookManager()
         self.comfy_client = None
@@ -63,6 +78,7 @@ class ComfyUIBot(commands.Bot):
                 instances_config=config['instances'],
                 hook_manager=self.hook_manager,
                 load_balancer_strategy=LoadBalanceStrategy(lb_strategy),
+                show_node_updates=config.get('show_node_updates', True),
             )
 
             await self._hook('is.comfyui.client.after_create', config['instances'])
@@ -221,67 +237,44 @@ class ComfyUIBot(commands.Bot):
 
             for s_check in security_results:
                 if not s_check.state:
-                    await interaction.response.send_message(
-                        embed=discord.Embed(
-                            title="❌ Error",
-                            description=s_check.message,
-                            color=0xFF0000
-                        )
-                    )
+                    await interaction.response.send_message(embed=error_embed(s_check.message))
                     return
 
             if not workflow_config:
                 await interaction.response.send_message(
-                    embed=discord.Embed(
-                        title="❌ Error",
-                        description=f"Workflow '{workflow_name}' not found!",
-                        color=0xFF0000
-                    )
+                    embed=error_embed(i18n.get("bot.workflow_not_found", workflow_name=workflow_name))
                 )
                 return
 
             if workflow_config.get('type', 'txt2img') != workflow_type:
                 await interaction.response.send_message(
-                    embed=discord.Embed(
-                        title="❌ Error",
-                        description=f"Workflow '{workflow_name}' is not a {workflow_type} workflow!",
-                        color=0xFF0000
-                    )
+                    embed=error_embed(i18n.get("bot.workflow_type_mismatch", workflow_name=workflow_name, workflow_type=workflow_type))
                 )
                 return
 
             if workflow_type in ['img2img', 'upscale']:
                 if not input_image:
                     await interaction.response.send_message(
-                        embed=discord.Embed(
-                            title="❌ Error",
-                            description="Image input is required for this workflow type!",
-                            color=0xFF0000
-                        )
+                        embed=error_embed(i18n.get("bot.image_required"))
                     )
                     return
 
                 if not input_image.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                     await interaction.response.send_message(
-                        embed=discord.Embed(
-                            title="❌ Error",
-                            description="Invalid image format. Supported formats: PNG, JPG, JPEG, WEBP",
-                            color=0xFF0000
-                        )
+                        embed=error_embed(i18n.get("bot.invalid_image_format"))
                     )
                     return
 
-            embed = discord.Embed(title="🔨 ImageSmith Forge", color=0x2F3136)
             queue_position = self.generation_queue.get_queue_position()
-            status = f"⏳ Queued (Position: {queue_position + 1})" if queue_position > 0 else "Starting generation..."
+            status = i18n.get("bot.queued", position=queue_position + 1) if queue_position > 0 else i18n.get("bot.starting_generation")
 
-            embed.add_field(name="Status", value=status, inline=False)
-            embed.add_field(name="Creator", value=interaction.user.mention, inline=True)
-            embed.add_field(name="Workflow", value=workflow_name, inline=True)
-            if prompt:
-                embed.add_field(name="Prompt", value=prompt[:1021] + "..." if len(prompt) > 1024 else prompt, inline=False)
-            if settings:
-                embed.add_field(name="Settings", value=f"```{settings}```", inline=False)
+            embed = generation_status_embed(
+                status=status,
+                creator_mention=interaction.user.mention,
+                workflow_name=workflow_name,
+                prompt=prompt,
+                settings=settings,
+            )
 
             await interaction.response.send_message(embed=embed)
             message = await interaction.original_response()
@@ -296,41 +289,37 @@ class ComfyUIBot(commands.Bot):
                 # We want to use the same instance for the image upload and generation
                 instance = uploaded_image[1]
 
+            # Prepare workflow BEFORE queueing (so form doesn't hold a queue slot)
+            workflow_json = self.workflow_manager.prepare_workflow(
+                workflow_name,
+                prompt,
+                settings,
+                image,
+                Image.open(io.BytesIO(input_image_file)) if input_image_file else None,
+            )
+
+            modified_workflow_json = await self.form_manager.process_workflow_form(
+                interaction,
+                workflow_config,
+                workflow_json,
+                message,
+            )
+
+            if modified_workflow_json is None:
+                return  # Form processing failed or timed out
+
+            # Update status to show we're now queueing for generation
+            new_embed = update_status_field(message.embeds[0], i18n.get("client.status.generation_in_progress"))
+            await message.edit(embed=new_embed)
+
             async def run_generation():
                 try:
-                    workflow_json = self.workflow_manager.prepare_workflow(
-                        workflow_name,
-                        prompt,
-                        settings,
-                        image,
-                        Image.open(io.BytesIO(input_image_file)) if input_image_file else None,
-                    )
-                    modified_workflow_json = await self.form_manager.process_workflow_form(
-                        interaction,
-                        workflow_config,
-                        workflow_json,
-                        message,
-                    )
-
-                    if modified_workflow_json is None:
-                        return  # Form processing failed or timed out
-
                     async def status_update(status_text: str):
-                        new_embed = message.embeds[0].copy()
-                        for i, field in enumerate(new_embed.fields):
-                            if field.name == "Status":
-                                new_embed.set_field_at(i, name="Status", value=status_text, inline=False)
-                                break
+                        new_embed = update_status_field(message.embeds[0], status_text)
                         await message.edit(embed=new_embed)
 
                     async def update_message(status: str, image_file: Optional[discord.File] = None):
-                        new_embed = message.embeds[0].copy()
-
-                        for i, field in enumerate(new_embed.fields):
-                            if field.name == "Status":
-                                new_embed.set_field_at(i, name="Status", value=status, inline=False)
-                                break
-
+                        new_embed = update_status_field(message.embeds[0], status)
                         if image_file:
                             await message.edit(embed=new_embed, attachments=[image_file])
                         else:
@@ -338,7 +327,7 @@ class ComfyUIBot(commands.Bot):
 
                     max_retries = 1
                     current_instance = instance
-                    current_workflow = workflow_json
+                    current_workflow = modified_workflow_json
 
                     for attempt in range(max_retries + 1):
                         try:
@@ -359,7 +348,7 @@ class ComfyUIBot(commands.Bot):
                                 raise Exception(f"Generation failed after instance interruption: {e}")
 
                             logger.warning(f"Instance interrupted (attempt {attempt + 1}), retrying...")
-                            await status_update("⚠️ Instance interrupted, retrying...")
+                            await status_update(i18n.get("client.status.instance_interrupted"))
 
                             current_instance = None
                             if input_image_file:
@@ -373,21 +362,13 @@ class ComfyUIBot(commands.Bot):
 
                 except Exception as e:
                     logger.error(e, exc_info=True)
-                    error_embed = discord.Embed(title="🔨 ImageSmith Forge", color=0xFF0000)
-                    error_embed.add_field(name="Status", value=f"❌ Error: {str(e)}", inline=False)
-                    error_embed.add_field(name="Creator", value=interaction.user.mention, inline=True)
-                    error_embed.add_field(name="Workflow", value=workflow_name, inline=True)
-                    await message.edit(embed=error_embed)
+                    await message.edit(embed=generation_error_embed(
+                        i18n.sanitize_error(str(e)), interaction.user.mention, workflow_name
+                    ))
 
             await self.generation_queue.add_to_queue(run_generation)
 
         except Exception as e:
             if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    embed=discord.Embed(
-                        title="❌ Error",
-                        description=str(e),
-                        color=0xFF0000
-                    )
-                )
+                await interaction.response.send_message(embed=error_embed(i18n.sanitize_error(str(e))))
             raise

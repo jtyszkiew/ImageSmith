@@ -1,0 +1,105 @@
+client:
+  media:
+    image_generated: "🖼 ¡Nueva imagen generada!"
+    video_generated: "🎥 ¡Nuevo video generado!"
+    audio_generated: "🎵 ¡Nuevo audio generado!"
+  progress:
+    processing_node: "🔄 Procesando nodo {node}..."
+  status:
+    generation_in_progress: "⚙️ Generando..."
+    generation_complete: "✅ ¡Generación completada!"
+    error_comfyui: "❌ Error: Error de ComfyUI, consulta los logs para más información."
+    error_generic: "❌ Error: {error}"
+    instance_interrupted: "⚠️ Instancia interrumpida, reintentando..."
+
+embed:
+  titles:
+    error: "❌ Error"
+    forge: "🔨 ImageSmith Forja"
+    available_workflows: "🔨 Workflows disponibles"
+    workflow_not_found: "❌ Workflow no encontrado"
+    workflow_detail: "🔨 Workflow: {name}"
+  fields:
+    status: "Estado"
+    creator: "Creador"
+    workflow: "Workflow"
+    prompt: "Prompt"
+    settings: "Ajustes"
+  messages:
+    no_workflows: "No hay workflows disponibles"
+    no_description: "Sin descripción"
+    workflow_not_found_desc: "No se encontró ningún workflow con el nombre: `{name}`"
+    workflow_type_filter: "Mostrando workflows de tipo {type_filter}"
+    workflow_list_footer: "Usa /workflows name:<workflow> para más detalles"
+    error_status: "❌ Error: {error}"
+  indicators:
+    footer_legend: "🔴 Requerido | ⚪ Opcional"
+  sections:
+    form_fields: "📝 **Campos del formulario**"
+    settings_header: "⚙️ **Ajustes**"
+    accepts: "**Acepta:**"
+  workflow_type_header: "{emoji} Workflows {type}"
+
+button:
+  upscale: "Ampliar"
+  regenerate: "Regenerar"
+  use_as_input: "Usar como entrada"
+
+bot:
+  workflow_not_found: "¡Workflow '{workflow_name}' no encontrado!"
+  workflow_type_mismatch: "¡El workflow '{workflow_name}' no es un workflow de tipo {workflow_type}!"
+  image_required: "¡Se requiere una imagen de entrada para este tipo de workflow!"
+  invalid_image_format: "Formato de imagen no válido. Formatos soportados: PNG, JPG, JPEG, WEBP"
+  starting_generation: "Iniciando generación..."
+  queued: "⏳ En cola (Posición: {position})"
+
+form:
+  submit: "Enviar"
+  cannot_interact: "No puedes interactuar con este formulario."
+  please_fill: "⌛ Por favor completa el formulario a continuación"
+  timed_out: "❌ Tiempo del formulario agotado"
+  proceeding: "⚙️ Procediendo con la generación..."
+  fill_required: "Por favor completa los siguientes campos obligatorios: {fields}"
+  error_processing: "Error al procesar {field_name}: {error}"
+  error_selection: "Error al procesar la selección: {error}"
+  set_field: "Establecer {field_name}"
+  set_field_optional: "Establecer {field_name} (Opcional)"
+  enter_number: "Introduce un número"
+  invalid_number: "Por favor introduce un número válido"
+  no_resolution: "No se proporcionó valor de resolución"
+  resolution_format: "Por favor introduce la resolución en formato ANCHOxALTO (ej. 512x512)"
+  resolution_separator: "La resolución debe contener el separador 'x'"
+  resolution_positive: "El ancho y alto deben ser números positivos"
+  resolution_max: "Las dimensiones no pueden superar {max_dimension}px"
+
+security:
+  no_permission_workflow: "No tienes permiso para usar este workflow."
+  no_required_roles: "No tienes los roles necesarios para usar este workflow."
+  channel_not_allowed: "Este workflow no está permitido en este canal."
+  no_permission_setting: "No tienes permiso para usar el ajuste '{setting_name}'"
+  error_checking: "Se produjo un error al verificar los permisos"
+
+error:
+  generic_message: "Se produjo un error inesperado. Por favor, inténtalo de nuevo más tarde."
+
+command:
+  forge:
+    description: "Forjar una imagen usando text-to-image"
+    prompt_desc: "Descripción de la imagen que quieres crear"
+    workflow_desc: "El workflow a usar (opcional)"
+    settings_desc: "Ajustes adicionales (opcional)"
+  reforge:
+    description: "Reforjar una imagen existente usando image-to-image"
+    image_desc: "La imagen a reforjar"
+    prompt_desc: "Descripción de los cambios que quieres hacer"
+    workflow_desc: "El workflow a usar (opcional)"
+    settings_desc: "Ajustes adicionales (opcional)"
+  upscale:
+    description: "Ampliar una imagen existente"
+    image_desc: "La imagen a ampliar"
+    workflow_desc: "El workflow a usar (opcional)"
+    settings_desc: "Ajustes adicionales (opcional)"
+  workflows:
+    description: "Listar workflows disponibles"
+    type_desc: "Tipo de workflows a listar (txt2img, img2img, upscale)"
+    name_desc: "Nombre del workflow para mostrar detalles"

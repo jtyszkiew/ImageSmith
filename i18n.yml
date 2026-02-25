@@ -1,0 +1,116 @@
+client:
+  media:
+    image_generated: "🖼 New image generated!"
+    video_generated: "🎥 New video generated!"
+    audio_generated: "🎵 New audio generated!"
+  progress:
+    processing_node: "🔄 Processing node {node}..."
+    bar_filled: "█"
+    bar_empty: "░"
+  status:
+    generation_in_progress: "⚙️ Generating..."
+    generation_complete: "✅ Generation complete!"
+    error_comfyui: "❌ Error: ComfyUI Error, check logs for more information."
+    error_generic: "❌ Error: {error}"
+    instance_interrupted: "⚠️ Instance interrupted, retrying..."
+
+embed:
+  titles:
+    error: "❌ Error"
+    forge: "🔨 ImageSmith Forge"
+    available_workflows: "🔨 Available Forge Workflows"
+    workflow_not_found: "❌ Workflow Not Found"
+    workflow_detail: "🔨 Workflow: {name}"
+  fields:
+    status: "Status"
+    creator: "Creator"
+    workflow: "Workflow"
+    prompt: "Prompt"
+    settings: "Settings"
+  messages:
+    no_workflows: "No workflows available"
+    no_description: "No description"
+    workflow_not_found_desc: "No workflow found with name: `{name}`"
+    workflow_type_filter: "Showing {type_filter} workflows"
+    workflow_list_footer: "Use /workflows name:<workflow> for detailed information"
+    error_status: "❌ Error: {error}"
+  indicators:
+    required: "🔴"
+    optional: "⚪"
+    footer_legend: "🔴 Required | ⚪ Optional"
+  sections:
+    form_fields: "📝 **Form Fields**"
+    settings_header: "⚙️ **Settings**"
+    accepts: "**Accepts:**"
+  workflow_types:
+    txt2img: "✍️"
+    img2img: "🖼️"
+    upscale: "🔍"
+    default: "⚡"
+  workflow_type_header: "{emoji} {type} Workflows"
+
+button:
+  upscale: "Upscale"
+  regenerate: "Regenerate"
+  use_as_input: "Use as Input"
+
+bot:
+  workflow_not_found: "Workflow '{workflow_name}' not found!"
+  workflow_type_mismatch: "Workflow '{workflow_name}' is not a {workflow_type} workflow!"
+  image_required: "Image input is required for this workflow type!"
+  invalid_image_format: "Invalid image format. Supported formats: PNG, JPG, JPEG, WEBP"
+  starting_generation: "Starting generation..."
+  queued: "⏳ Queued (Position: {position})"
+
+form:
+  submit: "Submit"
+  cannot_interact: "You cannot interact with this form."
+  please_fill: "⌛ Please fill out the form below"
+  timed_out: "❌ Form timed out"
+  proceeding: "⚙️ Proceeding with generation..."
+  fill_required: "Please fill in the following required fields: {fields}"
+  error_processing: "Error processing {field_name}: {error}"
+  error_selection: "Error processing selection: {error}"
+  set_field: "Set {field_name}"
+  set_field_optional: "Set {field_name} (Optional)"
+  enter_number: "Enter a number"
+  enter_text: "Enter text"
+  invalid_number: "Please enter a valid number"
+  no_resolution: "No resolution value provided"
+  resolution_format: "Please enter resolution in format WIDTHxHEIGHT (e.g., 512x512)"
+  resolution_separator: "Resolution must contain 'x' separator"
+  resolution_positive: "Width and height must be positive numbers"
+  resolution_max: "Dimensions cannot exceed {max_dimension}px"
+
+security:
+  no_permission_workflow: "You don't have permission to use this workflow."
+  no_required_roles: "You don't have required roles to use this workflow."
+  channel_not_allowed: "This workflow is not allowed on this channel."
+  no_permission_setting: "You don't have permission to use the '{setting_name}' setting"
+  error_checking: "An error occurred while checking permissions"
+
+error:
+  generic_message: "An unexpected error occurred. Please try again later."
+
+command:
+  forge:
+    description: "Forge an image using text-to-image"
+    prompt_desc: "Description of the image you want to create"
+    workflow_desc: "The workflow to use (optional)"
+    settings_desc: "Additional settings (optional)"
+  reforge:
+    description: "Reforge an existing image using image-to-image"
+    image_desc: "The image to reforge"
+    prompt_desc: "Description of the changes you want to make"
+    workflow_desc: "The workflow to use (optional)"
+    settings_desc: "Additional settings (optional)"
+  upscale:
+    description: "Upscale an existing image"
+    image_desc: "The image to upscale"
+    prompt_desc: "Description or prompt for upscaling (optional)"
+    workflow_desc: "The workflow to use (optional)"
+    settings_desc: "Additional settings (optional)"
+  workflows:
+    description: "List available workflows"
+    type_desc: "Type of workflows to list (txt2img, img2img, upscale)"
+    name_desc: "Name of the workflow to show details for"

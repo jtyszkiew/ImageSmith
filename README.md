@@ -27,6 +27,7 @@ leveraging ComfyUI's advanced capabilities.
 - 📈 **Real-time Progress** - Live updates on generation status
 - ⚙️ **Flexible Configuration** - Highly customizable settings
 - 🪝 **Hook System** - Customize workflow behavior
+- 🌍 **Multi-Language Support** - Built-in i18n with 7 languages
 
 ## 🚀 Getting Started
 
@@ -189,6 +190,46 @@ You can use the following configurations:
 | `on_submit`   | `string`                       | Code to execute when the form is submitted (will pass the provided data), method name should be always called `on_submit` to be executed                                | Yes      |
 | `on_default`  | `string`                       | If field is not required and no data is provided for given field this method is called so you can always set default value. Method name need to always be `on_default`. | No       |
 
+### ComfyUI Display Settings
+
+```yaml
+comfyui:
+  show_node_updates: false  # Suppress per-node progress messages (default: true)
+```
+
+When `show_node_updates` is set to `false`, per-node "Processing node X..." messages and progress bars are hidden. Completion, error, and media messages still appear normally.
+
+## 🌍 Internationalization
+
+ImageSmith includes built-in support for multiple languages. All UI strings — embeds, buttons, status messages, errors, forms, and security messages — are fully translatable.
+
+### Supported Languages
+
+| Code | Language   |
+|------|------------|
+| —    | English (default) |
+| `de` | German     |
+| `es` | Spanish    |
+| `fr` | French     |
+| `ja` | Japanese   |
+| `pl` | Polish     |
+| `pt` | Portuguese |
+
+### Configuration
+
+```yaml
+language: "pl"       # Use Polish translations (omit for English)
+env: "dev"           # Show full error details (default: "prod")
+i18n:                # Override any string key
+  embed:
+    titles:
+      error: "Custom Error Title"
+  bot:
+    starting_generation: "Generating your image..."
+```
+
+See `i18n.yml` for the full list of available string keys.
+
 ## 🔒 Security
 
 Configure access control for workflows and settings:
@@ -232,6 +273,7 @@ class MyPlugin(Plugin):
 
 - `is.comfyui.client.before_create`
 - `is.comfyui.client.after_create`
+- `is.security`
 - `is.security.before`
 - `is.comfyui.client.instance.timeout`
 - `is.comfyui.client.instance.reconnect`

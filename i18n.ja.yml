@@ -1,0 +1,105 @@
+client:
+  media:
+    image_generated: "🖼 新しい画像が生成されました！"
+    video_generated: "🎥 新しい動画が生成されました！"
+    audio_generated: "🎵 新しい音声が生成されました！"
+  progress:
+    processing_node: "🔄 ノード {node} を処理中..."
+  status:
+    generation_in_progress: "⚙️ 生成中..."
+    generation_complete: "✅ 生成完了！"
+    error_comfyui: "❌ エラー: ComfyUIエラー、詳細はログを確認してください。"
+    error_generic: "❌ エラー: {error}"
+    instance_interrupted: "⚠️ インスタンスが中断されました、再試行中..."
+
+embed:
+  titles:
+    error: "❌ エラー"
+    forge: "🔨 ImageSmith フォージ"
+    available_workflows: "🔨 利用可能なワークフロー"
+    workflow_not_found: "❌ ワークフローが見つかりません"
+    workflow_detail: "🔨 ワークフロー: {name}"
+  fields:
+    status: "ステータス"
+    creator: "作成者"
+    workflow: "ワークフロー"
+    prompt: "プロンプト"
+    settings: "設定"
+  messages:
+    no_workflows: "利用可能なワークフローはありません"
+    no_description: "説明なし"
+    workflow_not_found_desc: "`{name}` という名前のワークフローは見つかりませんでした"
+    workflow_type_filter: "{type_filter} ワークフローを表示中"
+    workflow_list_footer: "/workflows name:<ワークフロー名> で詳細を表示"
+    error_status: "❌ エラー: {error}"
+  indicators:
+    footer_legend: "🔴 必須 | ⚪ 任意"
+  sections:
+    form_fields: "📝 **フォームフィールド**"
+    settings_header: "⚙️ **設定**"
+    accepts: "**受け入れ:**"
+  workflow_type_header: "{emoji} {type} ワークフロー"
+
+button:
+  upscale: "アップスケール"
+  regenerate: "再生成"
+  use_as_input: "入力として使用"
+
+bot:
+  workflow_not_found: "ワークフロー '{workflow_name}' が見つかりません！"
+  workflow_type_mismatch: "ワークフロー '{workflow_name}' は {workflow_type} ワークフローではありません！"
+  image_required: "このワークフロータイプには入力画像が必要です！"
+  invalid_image_format: "無効な画像形式です。対応形式: PNG, JPG, JPEG, WEBP"
+  starting_generation: "生成を開始しています..."
+  queued: "⏳ キュー中 (位置: {position})"
+
+form:
+  submit: "送信"
+  cannot_interact: "このフォームを操作する権限がありません。"
+  please_fill: "⌛ 以下のフォームに入力してください"
+  timed_out: "❌ フォームがタイムアウトしました"
+  proceeding: "⚙️ 生成を続行しています..."
+  fill_required: "以下の必須フィールドを入力してください: {fields}"
+  error_processing: "{field_name} の処理中にエラーが発生しました: {error}"
+  error_selection: "選択の処理中にエラーが発生しました: {error}"
+  set_field: "{field_name} を設定"
+  set_field_optional: "{field_name} を設定 (任意)"
+  enter_number: "数値を入力"
+  invalid_number: "有効な数値を入力してください"
+  no_resolution: "解像度の値が指定されていません"
+  resolution_format: "解像度を 幅x高さ の形式で入力してください (例: 512x512)"
+  resolution_separator: "解像度には 'x' 区切りが必要です"
+  resolution_positive: "幅と高さは正の数でなければなりません"
+  resolution_max: "寸法は {max_dimension}px を超えることはできません"
+
+security:
+  no_permission_workflow: "このワークフローを使用する権限がありません。"
+  no_required_roles: "このワークフローを使用するために必要なロールがありません。"
+  channel_not_allowed: "このチャンネルではこのワークフローは許可されていません。"
+  no_permission_setting: "設定 '{setting_name}' を使用する権限がありません"
+  error_checking: "権限の確認中にエラーが発生しました"
+
+error:
+  generic_message: "予期しないエラーが発生しました。後でもう一度お試しください。"
+
+command:
+  forge:
+    description: "テキストから画像を生成する"
+    prompt_desc: "作成したい画像の説明"
+    workflow_desc: "使用するワークフロー (任意)"
+    settings_desc: "追加設定 (任意)"
+  reforge:
+    description: "既存の画像をimage-to-imageで再生成する"
+    image_desc: "再生成する画像"
+    prompt_desc: "加えたい変更の説明"
+    workflow_desc: "使用するワークフロー (任意)"
+    settings_desc: "追加設定 (任意)"
+  upscale:
+    description: "既存の画像をアップスケールする"
+    image_desc: "アップスケールする画像"
+    workflow_desc: "使用するワークフロー (任意)"
+    settings_desc: "追加設定 (任意)"
+  workflows:
+    description: "利用可能なワークフローを一覧表示"
+    type_desc: "一覧表示するワークフローのタイプ (txt2img, img2img, upscale)"
+    name_desc: "詳細を表示するワークフロー名"

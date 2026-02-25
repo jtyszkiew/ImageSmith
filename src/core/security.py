@@ -1,9 +1,8 @@
-from pyexpat.errors import messages
-from textwrap import indent
 from typing import Optional
 import discord
 
 from logger import logger
+from src.core.i18n import i18n
 
 
 class SecurityResult:
@@ -25,18 +24,18 @@ class SecurityManager:
 
         allowed_users = security_config.get('allowed_users', [])
         if len(allowed_users) > 0 and member.name not in allowed_users:
-            return SecurityResult(False, f"You don't have permission to use this workflow.")
+            return SecurityResult(False, i18n.get("security.no_permission_workflow"))
 
         allowed_roles = security_config.get('allowed_roles', [])
         if hasattr(member, 'roles'):
             member_roles = [role.name for role in member.roles]
             if len(allowed_roles) > 0 and not any(role in allowed_roles for role in member_roles):
-                return SecurityResult(False, f"You don't have required roles to use this workflow.")
+                return SecurityResult(False, i18n.get("security.no_required_roles"))
 
         if hasattr(interaction, 'channel'):
             allowed_channels = security_config.get('allowed_channels', [])
             if len(allowed_channels) > 0 and interaction.channel.name not in allowed_channels:
-                return SecurityResult(False, f"This workflow is not allowed on this channel.")
+                return SecurityResult(False, i18n.get("security.channel_not_allowed"))
 
         return SecurityResult(True)
 
@@ -60,7 +59,7 @@ class SecurityManager:
         setting_config = next((s for s in settings if s['name'] == setting_name), None)
 
         if not setting_config:
-            return SecurityResult(False, f"You don't have permission to use the '{setting_name}' setting")
+            return SecurityResult(False, i18n.get("security.no_permission_setting", setting_name=setting_name))
 
         security_config = setting_config.get('security', {})
         return self._check_user_permissions(interaction, security_config)
@@ -80,7 +79,7 @@ class SecurityManager:
             setting_name = setting.split('(')[0].strip()
 
             if not self.check_setting_access(interaction, workflow_config, setting_name).state:
-                return SecurityResult(False, f"You don't have permission to use the '{setting_name}' setting")
+                return SecurityResult(False, i18n.get("security.no_permission_setting", setting_name=setting_name))
 
         return SecurityResult(True)
 
@@ -118,4 +117,4 @@ class BasicSecurity:
 
         except Exception as e:
             logger.error(f"Error in security check: {e}", exc_info=True)
-            return SecurityResult(False, "An error occurred while checking permissions")
+            return SecurityResult(False, i18n.get("security.error_checking"))

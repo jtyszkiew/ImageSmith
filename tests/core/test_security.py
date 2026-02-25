@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 import discord
 
 from src.core.security import SecurityManager, BasicSecurity, SecurityResult
+from src.core.i18n import i18n
 
 @pytest.fixture
 def mock_member():

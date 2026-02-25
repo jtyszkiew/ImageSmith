@@ -7,6 +7,7 @@ from src.core.form import (
     FormDefinition,
     FormFieldHandler,
     TextFieldHandler,
+    TextareaFieldHandler,
     ResolutionFieldHandler,
     DynamicFormManager
 )
@@ -306,3 +307,61 @@ def on_default(workflowjson):
         assert result["5"]["inputs"]["width"] == 1024, f"Expected width 1024, got {result['5']['inputs']['width']}"
         assert result["5"]["inputs"]["height"] == 1024, f"Expected height 1024, got {result['5']['inputs']['height']}"
         assert "seed" in result["65"]["inputs"]  # Should have a default seed value
+
+
+class TestTextareaFieldHandler:
+    @pytest.mark.asyncio
+    async def test_process_value_returns_string(self):
+        handler = TextareaFieldHandler()
+        result = await handler.process_value("hello world")
+        assert result == "hello world"
+        assert isinstance(result, str)
+
+    @pytest.mark.asyncio
+    async def test_process_value_preserves_multiline(self):
+        handler = TextareaFieldHandler()
+        multiline = "line one\nline two\nline three"
+        result = await handler.process_value(multiline)
+        assert result == multiline
+
+    @pytest.mark.asyncio
+    async def test_process_value_numeric_string_stays_string(self):
+        handler = TextareaFieldHandler()
+        result = await handler.process_value("42")
+        assert result == "42"
+        assert isinstance(result, str)
+
+    def test_requires_modal(self):
+        handler = TextareaFieldHandler()
+        assert handler.requires_modal() is True
+
+    def test_textarea_registered_in_form_manager(self):
+        manager = DynamicFormManager()
+        assert 'textarea' in manager.field_handlers
+        assert isinstance(manager.field_handlers['textarea'], TextareaFieldHandler)
+
+    @pytest.mark.asyncio
+    async def test_apply_form_data_with_textarea(self):
+        manager = DynamicFormManager()
+        workflow_json = {
+            "94": {"inputs": {"tags": "default tags"}}
+        }
+        form_data = {
+            'field_definitions': [
+                FormField.from_dict({
+                    'name': 'Style',
+                    'type': 'textarea',
+                    'required': False,
+                    'description': 'Style/Tags',
+                    'message': 'Describe style',
+                    'on_submit': '''
+def on_submit(workflowjson, value):
+    workflowjson["94"]["inputs"]["tags"] = value
+'''
+                })
+            ],
+            'Style': 'pop rock, energetic, upbeat'
+        }
+
+        result = await manager.apply_form_data_to_workflow(form_data, workflow_json)
+        assert result["94"]["inputs"]["tags"] == "pop rock, energetic, upbeat"

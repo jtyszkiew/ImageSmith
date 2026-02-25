@@ -1,0 +1,105 @@
+client:
+  media:
+    image_generated: "🖼 Wygenerowano nowy obraz!"
+    video_generated: "🎥 Wygenerowano nowe wideo!"
+    audio_generated: "🎵 Wygenerowano nowe audio!"
+  progress:
+    processing_node: "🔄 Przetwarzanie węzła {node}..."
+  status:
+    generation_in_progress: "⚙️ Generowanie..."
+    generation_complete: "✅ Generowanie zakończone!"
+    error_comfyui: "❌ Błąd: Błąd ComfyUI, sprawdź logi po więcej informacji."
+    error_generic: "❌ Błąd: {error}"
+    instance_interrupted: "⚠️ Instancja przerwana, ponawiam..."
+
+embed:
+  titles:
+    error: "❌ Błąd"
+    forge: "🔨 ImageSmith Kuźnia"
+    available_workflows: "🔨 Dostępne przepływy pracy"
+    workflow_not_found: "❌ Nie znaleziono przepływu pracy"
+    workflow_detail: "🔨 Przepływ pracy: {name}"
+  fields:
+    status: "Status"
+    creator: "Twórca"
+    workflow: "Przepływ pracy"
+    prompt: "Prompt"
+    settings: "Ustawienia"
+  messages:
+    no_workflows: "Brak dostępnych przepływów pracy"
+    no_description: "Brak opisu"
+    workflow_not_found_desc: "Nie znaleziono przepływu pracy o nazwie: `{name}`"
+    workflow_type_filter: "Wyświetlanie przepływów {type_filter}"
+    workflow_list_footer: "Użyj /workflows name:<nazwa> aby zobaczyć szczegóły"
+    error_status: "❌ Błąd: {error}"
+  indicators:
+    footer_legend: "🔴 Wymagane | ⚪ Opcjonalne"
+  sections:
+    form_fields: "📝 **Pola formularza**"
+    settings_header: "⚙️ **Ustawienia**"
+    accepts: "**Przyjmuje:**"
+  workflow_type_header: "{emoji} Przepływy {type}"
+
+button:
+  upscale: "Powiększ"
+  regenerate: "Wygeneruj ponownie"
+  use_as_input: "Użyj jako wejście"
+
+bot:
+  workflow_not_found: "Przepływ pracy '{workflow_name}' nie został znaleziony!"
+  workflow_type_mismatch: "Przepływ pracy '{workflow_name}' nie jest typu {workflow_type}!"
+  image_required: "Obraz wejściowy jest wymagany dla tego typu przepływu pracy!"
+  invalid_image_format: "Nieprawidłowy format obrazu. Obsługiwane formaty: PNG, JPG, JPEG, WEBP"
+  starting_generation: "Rozpoczynam generowanie..."
+  queued: "⏳ W kolejce (Pozycja: {position})"
+
+form:
+  submit: "Wyślij"
+  cannot_interact: "Nie możesz korzystać z tego formularza."
+  please_fill: "⌛ Proszę wypełnić formularz poniżej"
+  timed_out: "❌ Czas formularza upłynął"
+  proceeding: "⚙️ Przechodzę do generowania..."
+  fill_required: "Proszę wypełnić następujące wymagane pola: {fields}"
+  error_processing: "Błąd przetwarzania {field_name}: {error}"
+  error_selection: "Błąd przetwarzania wyboru: {error}"
+  set_field: "Ustaw {field_name}"
+  set_field_optional: "Ustaw {field_name} (Opcjonalnie)"
+  enter_number: "Wprowadź liczbę"
+  invalid_number: "Proszę wprowadzić prawidłową liczbę"
+  no_resolution: "Nie podano rozdzielczości"
+  resolution_format: "Proszę podać rozdzielczość w formacie SZEROKOŚĆxWYSOKOŚĆ (np. 512x512)"
+  resolution_separator: "Rozdzielczość musi zawierać separator 'x'"
+  resolution_positive: "Szerokość i wysokość muszą być liczbami dodatnimi"
+  resolution_max: "Wymiary nie mogą przekraczać {max_dimension}px"
+
+security:
+  no_permission_workflow: "Nie masz uprawnień do użycia tego przepływu pracy."
+  no_required_roles: "Nie masz wymaganych ról do użycia tego przepływu pracy."
+  channel_not_allowed: "Ten przepływ pracy nie jest dozwolony na tym kanale."
+  no_permission_setting: "Nie masz uprawnień do użycia ustawienia '{setting_name}'"
+  error_checking: "Wystąpił błąd podczas sprawdzania uprawnień"
+
+error:
+  generic_message: "Wystąpił nieoczekiwany błąd. Spróbuj ponownie później."
+
+command:
+  forge:
+    description: "Wykuj obraz za pomocą text-to-image"
+    prompt_desc: "Opis obrazu, który chcesz stworzyć"
+    workflow_desc: "Przepływ pracy do użycia (opcjonalnie)"
+    settings_desc: "Dodatkowe ustawienia (opcjonalnie)"
+  reforge:
+    description: "Przekuj istniejący obraz za pomocą image-to-image"
+    image_desc: "Obraz do przekucia"
+    prompt_desc: "Opis zmian, które chcesz wprowadzić"
+    workflow_desc: "Przepływ pracy do użycia (opcjonalnie)"
+    settings_desc: "Dodatkowe ustawienia (opcjonalnie)"
+  upscale:
+    description: "Powiększ istniejący obraz"
+    image_desc: "Obraz do powiększenia"
+    workflow_desc: "Przepływ pracy do użycia (opcjonalnie)"
+    settings_desc: "Dodatkowe ustawienia (opcjonalnie)"
+  workflows:
+    description: "Wyświetl dostępne przepływy pracy"
+    type_desc: "Typ przepływów pracy (txt2img, img2img, upscale)"
+    name_desc: "Nazwa przepływu pracy do wyświetlenia szczegółów"

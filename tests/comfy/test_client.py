@@ -8,6 +8,7 @@ import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 
 from src.comfy.client import ComfyUIClient, ComfyUIInstance, LoadBalanceStrategy, ComfyUIAuth
+from src.core.i18n import i18n
 
 
 class MockAsyncContextManager:
@@ -200,8 +201,8 @@ class TestComfyUIClient:
         await mocked_client.listen_for_updates('test_prompt', callback)
 
         assert len(received_messages) > 0
-        assert any('Processing node test_node' in msg[0] for msg in received_messages)
-        assert any('Generation complete!' in msg[0] for msg in received_messages)
+        assert any(i18n.get("client.progress.processing_node", node="test_node") in msg[0] for msg in received_messages)
+        assert any(i18n.get("client.status.generation_complete") in msg[0] for msg in received_messages)
 
     @pytest.mark.asyncio
     async def test_image_url_handling(self, mocked_client):
@@ -503,3 +504,326 @@ class TestComfyUIClientImageUpload:
         # Verify lock was used correctly
         mock_lock.__aenter__.assert_called_once()
         mock_lock.__aexit__.assert_called_once()
+
+
+class TestCleanupPrompt:
+    @pytest.fixture
+    def client(self):
+        return ComfyUIClient([{'url': 'http://localhost:8188'}])
+
+    def test_cleanup_prompt(self, client):
+        """Removes prompt from both tracking structures."""
+        instance = Mock()
+        instance.active_prompts = {'p1', 'p2'}
+        client.prompt_to_instance['p1'] = instance
+
+        client._cleanup_prompt('p1', instance)
+
+        assert 'p1' not in instance.active_prompts
+        assert 'p1' not in client.prompt_to_instance
+        assert 'p2' in instance.active_prompts
+
+    def test_cleanup_prompt_idempotent(self, client):
+        """Safe to call when prompt already gone."""
+        instance = Mock()
+        instance.active_prompts = set()
+
+        # Should not raise
+        client._cleanup_prompt('nonexistent', instance)
+
+
+class TestHandleBinaryPreview:
+    @pytest.fixture
+    def client(self):
+        return ComfyUIClient([{'url': 'http://localhost:8188'}])
+
+    def test_handle_binary_preview_valid_image(self, client):
+        """Valid JPEG decoding returns discord.File."""
+        from PIL import Image as PILImage
+        import io as _io
+
+        # Create a small valid image
+        img = PILImage.new('RGB', (4, 4), color='red')
+        buf = _io.BytesIO()
+        img.save(buf, format='PNG')
+        raw_png = buf.getvalue()
+
+        # Prepend 8-byte header
+        message = b'\x00' * 8 + raw_png
+
+        result = client._handle_binary_preview(message)
+        assert result is not None
+        assert result.filename == 'preview.jpg'
+
+    def test_handle_binary_preview_too_short(self, client):
+        """Messages <= 8 bytes return None."""
+        assert client._handle_binary_preview(b'\x00' * 8) is None
+        assert client._handle_binary_preview(b'\x00' * 4) is None
+        assert client._handle_binary_preview(b'') is None
+
+    def test_handle_binary_preview_invalid_image(self, client):
+        """Corrupted data returns None."""
+        message = b'\x00' * 8 + b'this is not an image'
+        result = client._handle_binary_preview(message)
+        assert result is None
+
+
+class TestDownloadMedia:
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def mock_instance(self, mock_session):
+        instance = AsyncMock()
+        instance.base_url = 'http://localhost:8188'
+        instance.session = mock_session
+        return instance
+
+    @pytest.fixture
+    def client(self):
+        return ComfyUIClient([{'url': 'http://localhost:8188'}])
+
+    @pytest.mark.asyncio
+    async def test_download_media_success(self, client, mock_instance, mock_session):
+        """Successful download returns (bytes, filename)."""
+        response = AsyncMock()
+        response.status = 200
+        response.read = AsyncMock(return_value=b'media_bytes')
+        mock_session.get = MockPost(response)
+
+        result = await client._download_media(
+            mock_instance,
+            {'filename': 'output.png', 'type': 'output'},
+        )
+
+        assert result is not None
+        assert result == (b'media_bytes', 'output.png')
+
+    @pytest.mark.asyncio
+    async def test_download_media_missing_filename(self, client, mock_instance):
+        """Missing filename returns None."""
+        result = await client._download_media(mock_instance, {'type': 'output'})
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_download_media_non_dict(self, client, mock_instance):
+        """Non-dict input returns None."""
+        result = await client._download_media(mock_instance, "not_a_dict")
+        assert result is None
+
+
+class TestShowNodeUpdates:
+    @pytest.fixture
+    def client_with_updates(self):
+        return ComfyUIClient([{'url': 'http://localhost:8188'}], show_node_updates=True)
+
+    @pytest.fixture
+    def client_without_updates(self):
+        return ComfyUIClient([{'url': 'http://localhost:8188'}], show_node_updates=False)
+
+    def test_node_updates_enabled_by_default(self):
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        assert client.show_node_updates is True
+
+    @pytest.mark.asyncio
+    async def test_node_updates_disabled_skips_progress(self, client_without_updates):
+        """With show_node_updates=False, _handle_progress does not call the callback."""
+        callback = AsyncMock()
+        node_progress = {}
+        msg_data = {'node': 'node_1', 'value': 50, 'max': 100}
+
+        await client_without_updates._handle_progress(
+            msg_data, node_progress, [25, 50, 75, 100], None, callback,
+        )
+
+        callback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_node_updates_disabled_sends_single_in_progress(self, client_without_updates):
+        """With show_node_updates=False, _handle_executing sends a single 'in progress' message on first node."""
+        callback = AsyncMock()
+        instance = Mock()
+        instance.active_prompts = {'p1'}
+        node_progress = {}
+
+        # First node: should send the in-progress message
+        complete, notified = await client_without_updates._handle_executing(
+            {'node': 'node_1'}, node_progress, callback,
+            'p1', instance, None, None, False,
+        )
+
+        assert complete is False
+        assert notified is True
+        callback.assert_called_once()
+        assert i18n.get("client.status.generation_in_progress") in callback.call_args[0][0]
+
+        # Second node: should NOT send again
+        callback.reset_mock()
+        complete, notified = await client_without_updates._handle_executing(
+            {'node': 'node_2'}, node_progress, callback,
+            'p1', instance, None, None, True,
+        )
+
+        assert complete is False
+        assert notified is True
+        callback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_node_updates_disabled_still_shows_completion(self, client_without_updates):
+        """With show_node_updates=False, the completion message (node=None) is still sent."""
+        callback = AsyncMock()
+        instance = Mock()
+        instance.active_prompts = {'p1'}
+        client_without_updates.prompt_to_instance['p1'] = instance
+
+        complete, notified = await client_without_updates._handle_executing(
+            {'node': None}, {}, callback,
+            'p1', instance, None, None,
+        )
+
+        assert complete is True
+        callback.assert_called_once()
+        assert i18n.get("client.status.generation_complete") in callback.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_node_updates_enabled_sends_all(self, client_with_updates):
+        """With show_node_updates=True, both progress and executing callbacks fire."""
+        callback = AsyncMock()
+
+        # Test progress callback fires (50% hits both 25 and 50 milestones)
+        node_progress = {}
+        msg_data = {'node': 'node_1', 'value': 50, 'max': 100}
+        await client_with_updates._handle_progress(
+            msg_data, node_progress, [25, 50, 75, 100], None, callback,
+        )
+        assert callback.call_count >= 1
+
+        # Test executing callback fires
+        callback.reset_mock()
+        instance = Mock()
+        instance.active_prompts = {'p1'}
+        complete, notified = await client_with_updates._handle_executing(
+            {'node': 'node_1'}, {}, callback,
+            'p1', instance, None, None,
+        )
+        assert complete is False
+        callback.assert_called_once()
+
+
+class TestWebSocketMediaHandling:
+    @pytest.fixture
+    def mock_response(self):
+        response = AsyncMock()
+        response.status = 200
+        response.json.return_value = {'prompt_id': 'test_prompt'}
+        response.read = AsyncMock(return_value=b"fake_media_data")
+        return response
+
+    @pytest.fixture
+    def mock_session(self, mock_response):
+        session = AsyncMock()
+        session.post = MockPost(mock_response)
+        session.get = MockPost(mock_response)
+        return session
+
+    @pytest.fixture
+    def mock_instance(self, mock_session):
+        instance = AsyncMock()
+        instance.client_id = 'test_id'
+        instance.connected = True
+        instance.active_generations = 0
+        instance._lock = asyncio.Lock()
+        instance.base_url = 'http://localhost:8188'
+        instance.get_session.return_value = mock_session
+        instance.session = mock_session
+        return instance
+
+    @pytest.fixture
+    def mocked_client(self, mock_instance):
+        client = ComfyUIClient([{'url': 'http://localhost:8188'}])
+        client.instances = [mock_instance]
+        client.load_balancer = Mock()
+        client.load_balancer.get_instance = AsyncMock(return_value=mock_instance)
+        return client
+
+    @pytest.mark.asyncio
+    async def test_websocket_audio_handling(self, mocked_client, mock_instance):
+        """End-to-end: audio outputs trigger 'New audio generated!' callback."""
+        mock_ws = AsyncMock()
+        mock_instance.ws = mock_ws
+
+        messages = [
+            {'type': 'executed', 'data': {
+                'prompt_id': 'test_prompt',
+                'output': {'audio': [{'filename': 'output.wav', 'type': 'output'}]},
+            }},
+            {'type': 'executing', 'data': {'prompt_id': 'test_prompt', 'node': None}},
+        ]
+        mock_ws.recv = AsyncMock(side_effect=[json.dumps(msg) for msg in messages])
+
+        received = []
+        async def callback(status, image=None):
+            received.append((status, image))
+
+        mocked_client.prompt_to_instance['test_prompt'] = mock_instance
+        await mocked_client.listen_for_updates('test_prompt', callback)
+
+        assert any(i18n.get("client.media.audio_generated") in msg[0] for msg in received)
+        assert any(i18n.get("client.status.generation_complete") in msg[0] for msg in received)
+
+    @pytest.mark.asyncio
+    async def test_websocket_video_handling(self, mocked_client, mock_instance):
+        """End-to-end: gif outputs trigger 'New video generated!' callback."""
+        mock_ws = AsyncMock()
+        mock_instance.ws = mock_ws
+
+        messages = [
+            {'type': 'executed', 'data': {
+                'prompt_id': 'test_prompt',
+                'output': {'gifs': [{'filename': 'output.mp4', 'type': 'output'}]},
+            }},
+            {'type': 'executing', 'data': {'prompt_id': 'test_prompt', 'node': None}},
+        ]
+        mock_ws.recv = AsyncMock(side_effect=[json.dumps(msg) for msg in messages])
+
+        received = []
+        async def callback(status, image=None):
+            received.append((status, image))
+
+        mocked_client.prompt_to_instance['test_prompt'] = mock_instance
+        await mocked_client.listen_for_updates('test_prompt', callback)
+
+        assert any(i18n.get("client.media.video_generated") in msg[0] for msg in received)
+        assert any(i18n.get("client.status.generation_complete") in msg[0] for msg in received)
+
+    @pytest.mark.asyncio
+    async def test_websocket_mixed_media(self, mocked_client, mock_instance):
+        """Node with both images and audio triggers both callbacks."""
+        mock_ws = AsyncMock()
+        mock_instance.ws = mock_ws
+
+        messages = [
+            {'type': 'executed', 'data': {
+                'prompt_id': 'test_prompt',
+                'output': {
+                    'images': [{'filename': 'img.png', 'type': 'output'}],
+                    'audio': [{'filename': 'audio.wav', 'type': 'output'}],
+                },
+            }},
+            {'type': 'executing', 'data': {'prompt_id': 'test_prompt', 'node': None}},
+        ]
+        mock_ws.recv = AsyncMock(side_effect=[json.dumps(msg) for msg in messages])
+
+        received = []
+        async def callback(status, image=None):
+            received.append((status, image))
+
+        mocked_client.prompt_to_instance['test_prompt'] = mock_instance
+        await mocked_client.listen_for_updates('test_prompt', callback)
+
+        statuses = [msg[0] for msg in received]
+        assert any(i18n.get("client.media.image_generated") in s for s in statuses)
+        assert any(i18n.get("client.media.audio_generated") in s for s in statuses)
+        assert any(i18n.get("client.status.generation_complete") in s for s in statuses)

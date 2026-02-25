@@ -1,0 +1,105 @@
+client:
+  media:
+    image_generated: "🖼 Neues Bild generiert!"
+    video_generated: "🎥 Neues Video generiert!"
+    audio_generated: "🎵 Neues Audio generiert!"
+  progress:
+    processing_node: "🔄 Verarbeite Knoten {node}..."
+  status:
+    generation_in_progress: "⚙️ Wird generiert..."
+    generation_complete: "✅ Generierung abgeschlossen!"
+    error_comfyui: "❌ Fehler: ComfyUI-Fehler, überprüfe die Logs für weitere Informationen."
+    error_generic: "❌ Fehler: {error}"
+    instance_interrupted: "⚠️ Instanz unterbrochen, versuche erneut..."
+
+embed:
+  titles:
+    error: "❌ Fehler"
+    forge: "🔨 ImageSmith Schmiede"
+    available_workflows: "🔨 Verfügbare Workflows"
+    workflow_not_found: "❌ Workflow nicht gefunden"
+    workflow_detail: "🔨 Workflow: {name}"
+  fields:
+    status: "Status"
+    creator: "Ersteller"
+    workflow: "Workflow"
+    prompt: "Prompt"
+    settings: "Einstellungen"
+  messages:
+    no_workflows: "Keine Workflows verfügbar"
+    no_description: "Keine Beschreibung"
+    workflow_not_found_desc: "Kein Workflow mit dem Namen `{name}` gefunden"
+    workflow_type_filter: "Zeige {type_filter}-Workflows"
+    workflow_list_footer: "Verwende /workflows name:<workflow> für Details"
+    error_status: "❌ Fehler: {error}"
+  indicators:
+    footer_legend: "🔴 Erforderlich | ⚪ Optional"
+  sections:
+    form_fields: "📝 **Formularfelder**"
+    settings_header: "⚙️ **Einstellungen**"
+    accepts: "**Akzeptiert:**"
+  workflow_type_header: "{emoji} {type}-Workflows"
+
+button:
+  upscale: "Hochskalieren"
+  regenerate: "Neu generieren"
+  use_as_input: "Als Eingabe verwenden"
+
+bot:
+  workflow_not_found: "Workflow '{workflow_name}' nicht gefunden!"
+  workflow_type_mismatch: "Workflow '{workflow_name}' ist kein {workflow_type}-Workflow!"
+  image_required: "Ein Eingabebild ist für diesen Workflow-Typ erforderlich!"
+  invalid_image_format: "Ungültiges Bildformat. Unterstützte Formate: PNG, JPG, JPEG, WEBP"
+  starting_generation: "Starte Generierung..."
+  queued: "⏳ In Warteschlange (Position: {position})"
+
+form:
+  submit: "Absenden"
+  cannot_interact: "Du kannst nicht mit diesem Formular interagieren."
+  please_fill: "⌛ Bitte fülle das Formular unten aus"
+  timed_out: "❌ Formular-Zeitüberschreitung"
+  proceeding: "⚙️ Fahre mit der Generierung fort..."
+  fill_required: "Bitte fülle die folgenden Pflichtfelder aus: {fields}"
+  error_processing: "Fehler bei der Verarbeitung von {field_name}: {error}"
+  error_selection: "Fehler bei der Verarbeitung der Auswahl: {error}"
+  set_field: "{field_name} festlegen"
+  set_field_optional: "{field_name} festlegen (Optional)"
+  enter_number: "Zahl eingeben"
+  invalid_number: "Bitte gib eine gültige Zahl ein"
+  no_resolution: "Kein Auflösungswert angegeben"
+  resolution_format: "Bitte gib die Auflösung im Format BREITExHÖHE ein (z.B. 512x512)"
+  resolution_separator: "Auflösung muss ein 'x' als Trennzeichen enthalten"
+  resolution_positive: "Breite und Höhe müssen positive Zahlen sein"
+  resolution_max: "Abmessungen dürfen {max_dimension}px nicht überschreiten"
+
+security:
+  no_permission_workflow: "Du hast keine Berechtigung, diesen Workflow zu verwenden."
+  no_required_roles: "Du hast nicht die erforderlichen Rollen für diesen Workflow."
+  channel_not_allowed: "Dieser Workflow ist in diesem Kanal nicht erlaubt."
+  no_permission_setting: "Du hast keine Berechtigung, die Einstellung '{setting_name}' zu verwenden"
+  error_checking: "Beim Überprüfen der Berechtigungen ist ein Fehler aufgetreten"
+
+error:
+  generic_message: "Ein unerwarteter Fehler ist aufgetreten. Bitte versuche es später erneut."
+
+command:
+  forge:
+    description: "Ein Bild mit Text-to-Image schmieden"
+    prompt_desc: "Beschreibung des Bildes, das du erstellen möchtest"
+    workflow_desc: "Der zu verwendende Workflow (optional)"
+    settings_desc: "Zusätzliche Einstellungen (optional)"
+  reforge:
+    description: "Ein vorhandenes Bild mit Image-to-Image umschmieden"
+    image_desc: "Das umzuschmiedende Bild"
+    prompt_desc: "Beschreibung der gewünschten Änderungen"
+    workflow_desc: "Der zu verwendende Workflow (optional)"
+    settings_desc: "Zusätzliche Einstellungen (optional)"
+  upscale:
+    description: "Ein vorhandenes Bild hochskalieren"
+    image_desc: "Das hochzuskalierende Bild"
+    workflow_desc: "Der zu verwendende Workflow (optional)"
+    settings_desc: "Zusätzliche Einstellungen (optional)"
+  workflows:
+    description: "Verfügbare Workflows anzeigen"
+    type_desc: "Typ der Workflows (txt2img, img2img, upscale)"
+    name_desc: "Name des Workflows für Details"

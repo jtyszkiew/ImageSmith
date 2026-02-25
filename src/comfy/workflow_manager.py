@@ -38,8 +38,9 @@ class WorkflowManager:
             node_id = str(workflow_config['text_prompt_node_id'])
             if node_id in modified_workflow:
                 node = modified_workflow[node_id]
-                if 'inputs' in node and 'text' in node['inputs']:
-                    node['inputs']['text'] = prompt
+                input_key = workflow_config.get('text_prompt_input_key', 'text')
+                if 'inputs' in node and input_key in node['inputs']:
+                    node['inputs'][input_key] = prompt
                     logger.debug(f"Updated prompt in node {node_id}: {prompt}")
 
         # Update image if provided and node is configured

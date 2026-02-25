@@ -163,17 +163,30 @@ class TestPlugin(Plugin):
 
     @pytest.mark.asyncio
     async def test_handle_generation(self, bot):
+        import discord
 
         # Mock interaction
         interaction = AsyncMock()
         interaction.user = Mock()
         interaction.user.mention = "@test_user"
 
-        await bot.handle_generation(
-            interaction=interaction,
-            workflow_type='txt2img',
-            prompt="test prompt"
-        )
+        # Mock the message returned by original_response with a real embed
+        embed = discord.Embed(title="Test")
+        embed.add_field(name="Status", value="Starting...", inline=False)
+        message = AsyncMock()
+        message.embeds = [embed]
+        interaction.original_response.return_value = message
+
+        # Mock workflow preparation and form processing (called before queueing)
+        with patch.object(bot.workflow_manager, 'prepare_workflow', return_value={'test': 'workflow'}):
+            bot.form_manager = AsyncMock()
+            bot.form_manager.process_workflow_form.return_value = {'test': 'modified_workflow'}
+
+            await bot.handle_generation(
+                interaction=interaction,
+                workflow_type='txt2img',
+                prompt="test prompt"
+            )
 
         assert interaction.response.send_message.called
         assert bot.generation_queue.get_queue_position() >= 0

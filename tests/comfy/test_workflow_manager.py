@@ -149,6 +149,59 @@ def hd(workflowjson):
         assert workflow["5"]["inputs"]["height"] == 720
 
     @pytest.mark.asyncio
+    async def test_update_workflow_nodes_custom_input_key(self, workflow_manager):
+        """Test that text_prompt_input_key maps the prompt to the correct input field"""
+        workflow_json = {
+            "94": {"inputs": {"lyrics": "default lyrics", "tags": "default tags"}}
+        }
+        workflow_config = {
+            'text_prompt_node_id': '94',
+            'text_prompt_input_key': 'lyrics'
+        }
+
+        updated = workflow_manager.update_workflow_nodes(
+            workflow_json,
+            workflow_config,
+            prompt="my custom lyrics"
+        )
+        assert updated["94"]["inputs"]["lyrics"] == "my custom lyrics"
+
+    @pytest.mark.asyncio
+    async def test_update_workflow_nodes_default_input_key(self, workflow_manager, sample_workflow_json):
+        """Test that omitting text_prompt_input_key defaults to 'text'"""
+        workflow_json = workflow_manager.load_workflow_file(str(sample_workflow_json))
+        workflow_config = {
+            'text_prompt_node_id': '6'
+        }
+
+        updated = workflow_manager.update_workflow_nodes(
+            workflow_json,
+            workflow_config,
+            prompt="test prompt"
+        )
+        assert updated["6"]["inputs"]["text"] == "test prompt"
+
+    @pytest.mark.asyncio
+    async def test_update_workflow_nodes_missing_input_key(self, workflow_manager):
+        """Test that a missing input key in the node does nothing"""
+        workflow_json = {
+            "94": {"inputs": {"other_field": "value"}}
+        }
+        workflow_config = {
+            'text_prompt_node_id': '94',
+            'text_prompt_input_key': 'lyrics'
+        }
+
+        updated = workflow_manager.update_workflow_nodes(
+            workflow_json,
+            workflow_config,
+            prompt="test prompt"
+        )
+        # Should not add a new key or crash
+        assert "lyrics" not in updated["94"]["inputs"]
+        assert updated["94"]["inputs"]["other_field"] == "value"
+
+    @pytest.mark.asyncio
     def test_get_default_workflow_for_channel(self, workflow_manager):
         workflow = workflow_manager.get_default_workflow('txt2img', channel_name='test_channel')
         print("Returned workflow:", workflow)

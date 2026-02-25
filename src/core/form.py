@@ -6,6 +6,7 @@ import discord
 from discord import ui
 
 from logger import logger
+from src.core.i18n import i18n
 
 
 @dataclass
@@ -39,7 +40,7 @@ class FormField:
 class SubmitButton(ui.Button):
     def __init__(self, view: 'FormView'):
         super().__init__(
-            label="Submit",
+            label=i18n.get("form.submit"),
             style=discord.ButtonStyle.success,
             custom_id="form_submit"
         )
@@ -47,7 +48,7 @@ class SubmitButton(ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.form_view.user_id:
-            await interaction.response.send_message("You cannot interact with this form.", ephemeral=True)
+            await interaction.response.send_message(i18n.get("form.cannot_interact"), ephemeral=True)
             return
 
         # Validate required fields
@@ -60,7 +61,7 @@ class SubmitButton(ui.Button):
 
         if missing_fields:
             await interaction.response.send_message(
-                f"Please fill in the following required fields: {', '.join(missing_fields)}",
+                i18n.get("form.fill_required", fields=', '.join(missing_fields)),
                 ephemeral=True
             )
             return
@@ -113,7 +114,7 @@ class TextFieldHandler(FormFieldHandler):
     def create_component(self, field: FormField) -> ui.TextInput:
         return ui.TextInput(
             label=field.message,
-            placeholder="Enter a number",
+            placeholder=i18n.get("form.enter_number"),
             custom_id=f"form_field_{field.name}"
         )
 
@@ -121,7 +122,25 @@ class TextFieldHandler(FormFieldHandler):
         try:
             return int(value)
         except ValueError:
-            raise ValueError("Please enter a valid number")
+            raise ValueError(i18n.get("form.invalid_number"))
+
+    def requires_modal(self) -> bool:
+        return True
+
+
+class TextareaFieldHandler(FormFieldHandler):
+    """Handler for multi-line text input fields"""
+
+    def create_component(self, field: FormField) -> ui.TextInput:
+        return ui.TextInput(
+            label=field.message,
+            placeholder=i18n.get("form.enter_text"),
+            style=discord.TextStyle.long,
+            custom_id=f"form_field_{field.name}"
+        )
+
+    async def process_value(self, value: str) -> str:
+        return str(value)
 
     def requires_modal(self) -> bool:
         return True
@@ -159,7 +178,9 @@ class ResolutionFieldHandler(SelectFieldHandler):
 
     async def process_value(self, values: List[str]) -> List[int]:
         if not values:
-            raise ValueError("No resolution value provided")
+            raise ValueError(i18n.get("form.no_resolution"))
+
+        max_dimension = 2048  # or whatever your max should be
 
         try:
             # Strip whitespace and convert to lowercase
@@ -167,26 +188,30 @@ class ResolutionFieldHandler(SelectFieldHandler):
 
             # Validate format using more specific split
             if 'x' not in resolution:
-                raise ValueError("Resolution must contain 'x' separator")
+                raise ValueError(i18n.get("form.resolution_separator"))
 
             width, height = map(int, resolution.split('x', 1))
 
             # Add validation for reasonable dimensions
             if width <= 0 or height <= 0:
-                raise ValueError("Width and height must be positive numbers")
+                raise ValueError(i18n.get("form.resolution_positive"))
 
             # Optional: Add maximum dimension check
-            max_dimension = 2048  # or whatever your max should be
             if width > max_dimension or height > max_dimension:
-                raise ValueError(f"Dimensions cannot exceed {max_dimension}px")
+                raise ValueError(i18n.get("form.resolution_max", max_dimension=max_dimension))
 
             return [int(width), int(height)]
 
         except ValueError as e:
             # Re-raise with more specific message if it's our custom error
-            if str(e).startswith("Resolution"):
+            known_errors = (
+                i18n.get("form.resolution_separator"),
+                i18n.get("form.resolution_positive"),
+                i18n.get("form.resolution_max", max_dimension=max_dimension),
+            )
+            if str(e) in known_errors:
                 raise
-            raise ValueError("Please enter resolution in format WIDTHxHEIGHT (e.g., 512x512)")
+            raise ValueError(i18n.get("form.resolution_format"))
 
     def requires_modal(self) -> bool:
         return False
@@ -204,7 +229,7 @@ class FormModal(ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("You cannot interact with this form.", ephemeral=True)
+            await interaction.response.send_message(i18n.get("form.cannot_interact"), ephemeral=True)
             return
 
         try:
@@ -226,7 +251,7 @@ class FormModal(ui.Modal):
             await interaction.response.defer(ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(
-                f"Error processing {self.field.name}: {str(e)}",
+                i18n.get("form.error_processing", field_name=self.field.name, error=i18n.sanitize_error(str(e))),
                 ephemeral=True
             )
 
@@ -234,7 +259,10 @@ class FormModal(ui.Modal):
 class FormButton(ui.Button):
     """Button that triggers a modal form"""
     def __init__(self, field: FormField, handler: FormFieldHandler, view: 'FormView'):
-        label = f"Set {field.name}" + ("" if field.required else " (Optional)")
+        if field.required:
+            label = i18n.get("form.set_field", field_name=field.name)
+        else:
+            label = i18n.get("form.set_field_optional", field_name=field.name)
         super().__init__(
             label=label,
             style=discord.ButtonStyle.primary,
@@ -246,7 +274,7 @@ class FormButton(ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.form_view.user_id:
-            await interaction.response.send_message("You cannot interact with this form.", ephemeral=True)
+            await interaction.response.send_message(i18n.get("form.cannot_interact"), ephemeral=True)
             return
 
         modal = FormModal(self.field, self.handler, self.form_view.completed_fields, self.form_view.user_id)
@@ -278,7 +306,7 @@ class FormView(ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("You cannot interact with this form.", ephemeral=True)
+            await interaction.response.send_message(i18n.get("form.cannot_interact"), ephemeral=True)
             return False
 
         component_type = interaction.data.get("component_type")
@@ -297,7 +325,7 @@ class FormView(ui.View):
                 await interaction.response.defer(ephemeral=True)
             except Exception as e:
                 await interaction.response.send_message(
-                    f"Error processing selection: {str(e)}",
+                    i18n.get("form.error_selection", error=i18n.sanitize_error(str(e))),
                     ephemeral=True
                 )
         return True
@@ -309,6 +337,7 @@ class DynamicFormManager:
     def __init__(self):
         self.field_handlers = {
             'text': TextFieldHandler(),
+            'textarea': TextareaFieldHandler(),
             'resolution': ResolutionFieldHandler(),
             'select': SelectFieldHandler(),
         }
@@ -338,10 +367,11 @@ class DynamicFormManager:
         completed_fields = set()
 
         # Update message to show we're collecting inputs
+        status_label = i18n.get("embed.fields.status")
         embed = message.embeds[0].copy()
         for i, field in enumerate(embed.fields):
-            if field.name == "Status":
-                embed.set_field_at(i, name="Status", value="⌛ Please fill out the form below", inline=False)
+            if field.name == status_label:
+                embed.set_field_at(i, name=status_label, value=i18n.get("form.please_fill"), inline=False)
                 break
 
         # Create a view with all form fields
@@ -373,14 +403,14 @@ class DynamicFormManager:
                 # Find the status field index
                 status_field_index = next(
                     (i for i, field in enumerate(embed.fields)
-                     if field.name == "Status"),
+                     if field.name == status_label),
                     None
                 )
                 if status_field_index is not None:
                     embed.set_field_at(
                         status_field_index,
-                        name="Status",
-                        value="❌ Form timed out",
+                        name=status_label,
+                        value=i18n.get("form.timed_out"),
                         inline=False
                     )
                 await message.edit(embed=embed, view=None)
@@ -389,8 +419,8 @@ class DynamicFormManager:
         # Update message to show we're proceeding with generation
         embed = message.embeds[0].copy()
         for i, field in enumerate(embed.fields):
-            if field.name == "Status":
-                embed.set_field_at(i, name="Status", value="⚙️ Proceeding with generation...", inline=False)
+            if field.name == status_label:
+                embed.set_field_at(i, name=status_label, value=i18n.get("form.proceeding"), inline=False)
                 break
         await message.edit(embed=embed, view=None)
 

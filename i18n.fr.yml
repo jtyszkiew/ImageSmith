@@ -1,0 +1,105 @@
+client:
+  media:
+    image_generated: "🖼 Nouvelle image générée !"
+    video_generated: "🎥 Nouvelle vidéo générée !"
+    audio_generated: "🎵 Nouvel audio généré !"
+  progress:
+    processing_node: "🔄 Traitement du nœud {node}..."
+  status:
+    generation_in_progress: "⚙️ Génération en cours..."
+    generation_complete: "✅ Génération terminée !"
+    error_comfyui: "❌ Erreur : Erreur ComfyUI, consultez les logs pour plus d'informations."
+    error_generic: "❌ Erreur : {error}"
+    instance_interrupted: "⚠️ Instance interrompue, nouvelle tentative..."
+
+embed:
+  titles:
+    error: "❌ Erreur"
+    forge: "🔨 ImageSmith Forge"
+    available_workflows: "🔨 Workflows disponibles"
+    workflow_not_found: "❌ Workflow non trouvé"
+    workflow_detail: "🔨 Workflow : {name}"
+  fields:
+    status: "Statut"
+    creator: "Créateur"
+    workflow: "Workflow"
+    prompt: "Prompt"
+    settings: "Paramètres"
+  messages:
+    no_workflows: "Aucun workflow disponible"
+    no_description: "Aucune description"
+    workflow_not_found_desc: "Aucun workflow trouvé avec le nom : `{name}`"
+    workflow_type_filter: "Affichage des workflows {type_filter}"
+    workflow_list_footer: "Utilisez /workflows name:<workflow> pour plus de détails"
+    error_status: "❌ Erreur : {error}"
+  indicators:
+    footer_legend: "🔴 Requis | ⚪ Optionnel"
+  sections:
+    form_fields: "📝 **Champs du formulaire**"
+    settings_header: "⚙️ **Paramètres**"
+    accepts: "**Accepte :**"
+  workflow_type_header: "{emoji} Workflows {type}"
+
+button:
+  upscale: "Agrandir"
+  regenerate: "Régénérer"
+  use_as_input: "Utiliser comme entrée"
+
+bot:
+  workflow_not_found: "Workflow '{workflow_name}' non trouvé !"
+  workflow_type_mismatch: "Le workflow '{workflow_name}' n'est pas un workflow {workflow_type} !"
+  image_required: "Une image d'entrée est requise pour ce type de workflow !"
+  invalid_image_format: "Format d'image invalide. Formats supportés : PNG, JPG, JPEG, WEBP"
+  starting_generation: "Démarrage de la génération..."
+  queued: "⏳ En file d'attente (Position : {position})"
+
+form:
+  submit: "Envoyer"
+  cannot_interact: "Vous ne pouvez pas interagir avec ce formulaire."
+  please_fill: "⌛ Veuillez remplir le formulaire ci-dessous"
+  timed_out: "❌ Délai du formulaire expiré"
+  proceeding: "⚙️ Lancement de la génération..."
+  fill_required: "Veuillez remplir les champs obligatoires suivants : {fields}"
+  error_processing: "Erreur lors du traitement de {field_name} : {error}"
+  error_selection: "Erreur lors du traitement de la sélection : {error}"
+  set_field: "Définir {field_name}"
+  set_field_optional: "Définir {field_name} (Optionnel)"
+  enter_number: "Entrez un nombre"
+  invalid_number: "Veuillez entrer un nombre valide"
+  no_resolution: "Aucune résolution fournie"
+  resolution_format: "Veuillez entrer la résolution au format LARGEURxHAUTEUR (ex. 512x512)"
+  resolution_separator: "La résolution doit contenir le séparateur 'x'"
+  resolution_positive: "La largeur et la hauteur doivent être des nombres positifs"
+  resolution_max: "Les dimensions ne peuvent pas dépasser {max_dimension}px"
+
+security:
+  no_permission_workflow: "Vous n'avez pas la permission d'utiliser ce workflow."
+  no_required_roles: "Vous n'avez pas les rôles requis pour utiliser ce workflow."
+  channel_not_allowed: "Ce workflow n'est pas autorisé sur ce canal."
+  no_permission_setting: "Vous n'avez pas la permission d'utiliser le paramètre '{setting_name}'"
+  error_checking: "Une erreur est survenue lors de la vérification des permissions"
+
+error:
+  generic_message: "Une erreur inattendue s'est produite. Veuillez réessayer plus tard."
+
+command:
+  forge:
+    description: "Forger une image avec text-to-image"
+    prompt_desc: "Description de l'image que vous souhaitez créer"
+    workflow_desc: "Le workflow à utiliser (optionnel)"
+    settings_desc: "Paramètres supplémentaires (optionnel)"
+  reforge:
+    description: "Reforger une image existante avec image-to-image"
+    image_desc: "L'image à reforger"
+    prompt_desc: "Description des modifications souhaitées"
+    workflow_desc: "Le workflow à utiliser (optionnel)"
+    settings_desc: "Paramètres supplémentaires (optionnel)"
+  upscale:
+    description: "Agrandir une image existante"
+    image_desc: "L'image à agrandir"
+    workflow_desc: "Le workflow à utiliser (optionnel)"
+    settings_desc: "Paramètres supplémentaires (optionnel)"
+  workflows:
+    description: "Lister les workflows disponibles"
+    type_desc: "Type de workflows à lister (txt2img, img2img, upscale)"
+    name_desc: "Nom du workflow pour afficher les détails"
