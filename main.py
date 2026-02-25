@@ -3,10 +3,10 @@ import os
 import sys
 
 from logger import logger
-from src.bot.imagesmith import ComfyUIBot
+from src.bot.imagesmith import ImageSmith
 
 async def main():
-    bot = ComfyUIBot()
+    bot = ImageSmith()
 
     logger.info("Starting bot...")
     try:

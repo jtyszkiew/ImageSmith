@@ -15,6 +15,10 @@ class SecurityResult:
 class SecurityManager:
     """Manages security permissions for workflows and settings"""
 
+    def __init__(self, hook_manager=None):
+        if hook_manager is not None:
+            hook_manager.register_hook('is.security', self.check_security)
+
     def _check_user_permissions(self, interaction: discord.Interaction, security_config: dict) -> SecurityResult:
         """Check if user has permission based on username or roles"""
         member = interaction.user
@@ -83,13 +87,6 @@ class SecurityManager:
 
         return SecurityResult(True)
 
-
-class BasicSecurity:
-    def __init__(self, bot):
-        self.security_manager = bot.security_manager
-
-        bot.hook_manager.register_hook('is.security', self.check_security)
-
     async def check_security(self,
                              interaction: discord.Interaction,
                              workflow_name: str,
@@ -99,12 +96,12 @@ class BasicSecurity:
                              settings: Optional[str] = None) -> SecurityResult:
         """Check if user has permission to use the workflow and settings"""
         try:
-            result = self.security_manager.check_workflow_access(interaction, workflow_name, workflow_config)
+            result = self.check_workflow_access(interaction, workflow_name, workflow_config)
             if not result.state:
                 return SecurityResult(result.state, result.message)
 
             if settings:
-                result = self.security_manager.validate_settings_string(
+                result = self.validate_settings_string(
                     interaction,
                     workflow_config,
                     settings
@@ -118,3 +115,27 @@ class BasicSecurity:
         except Exception as e:
             logger.error(f"Error in security check: {e}", exc_info=True)
             return SecurityResult(False, i18n.get("security.error_checking"))
+
+
+class BasicSecurity:
+    """Deprecated: Use SecurityManager with hook_manager parameter instead.
+
+    This class is kept for backward compatibility with external plugins.
+    """
+
+    def __init__(self, bot):
+        self.security_manager = bot.security_manager
+
+        bot.hook_manager.register_hook('is.security', self.check_security)
+
+    async def check_security(self,
+                             interaction: discord.Interaction,
+                             workflow_name: str,
+                             workflow_type: str,
+                             prompt: str,
+                             workflow_config: dict,
+                             settings: Optional[str] = None) -> SecurityResult:
+        """Deprecated: Use SecurityManager.check_security instead."""
+        return await self.security_manager.check_security(
+            interaction, workflow_name, workflow_type, prompt, workflow_config, settings
+        )

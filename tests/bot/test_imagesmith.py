@@ -3,10 +3,10 @@ import pytest_asyncio
 import yaml
 from unittest.mock import Mock, AsyncMock, patch
 
-from src.bot.imagesmith import ComfyUIBot, SecurityResult
+from src.bot.imagesmith import ImageSmith, SecurityResult
 
 
-class TestComfyUIBot:
+class TestImageSmith:
     @pytest.fixture
     def mock_config(self, tmp_path):
         config = {
@@ -49,7 +49,7 @@ class TestComfyUIBot:
             # mock_get_default_workflow.return_value = "test_workflow"
 
             # Create bot instance
-            bot = ComfyUIBot(plugins_path=f"{tmp_path}/plugins")
+            bot = ImageSmith(plugins_path=f"{tmp_path}/plugins")
 
             try:
                 yield bot
@@ -67,6 +67,7 @@ class TestComfyUIBot:
         assert isinstance(bot.plugins, list)
         assert isinstance(bot.active_generations, dict)
         assert bot.generation_queue is not None
+        assert bot.form_manager is not None
 
     @pytest.mark.asyncio
     async def test_setup_hook(self, bot):

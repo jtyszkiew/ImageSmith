@@ -40,19 +40,6 @@ def security_manager():
     return SecurityManager()
 
 
-@pytest.fixture
-def mock_bot():
-    bot = Mock()
-    bot.security_manager = SecurityManager()
-    bot.hook_manager = Mock()
-    return bot
-
-
-@pytest.fixture
-def basic_security(mock_bot):
-    return BasicSecurity(mock_bot)
-
-
 class TestSecurityManager:
     def test_check_user_permissions_disabled_security(self, security_manager, mock_interaction):
         security_config = {"enabled": False}
@@ -158,9 +145,14 @@ class TestSecurityManager:
         }
         assert security_manager._check_user_permissions(mock_interaction, security_config).state is False
 
-class TestBasicSecurity:
+
+class TestSecurityManagerCheckSecurity:
+    @pytest.fixture
+    def security_manager(self):
+        return SecurityManager()
+
     @pytest.mark.asyncio
-    async def test_check_security_workflow_denied(self, basic_security):
+    async def test_check_security_workflow_denied(self, security_manager):
         interaction = Mock(spec=discord.Interaction)
         interaction.user = Mock(spec=discord.Member)
         workflow_config = {
@@ -170,7 +162,7 @@ class TestBasicSecurity:
             }
         }
 
-        result = await basic_security.check_security(
+        result = await security_manager.check_security(
             interaction=interaction,
             workflow_name="test_workflow",
             workflow_type="test",
@@ -183,7 +175,7 @@ class TestBasicSecurity:
         assert "permission" in result.message
 
     @pytest.mark.asyncio
-    async def test_check_security_settings_denied(self, basic_security):
+    async def test_check_security_settings_denied(self, security_manager):
         interaction = Mock(spec=discord.Interaction)
         interaction.user = Mock(spec=discord.Member)
         workflow_config = {
@@ -200,7 +192,7 @@ class TestBasicSecurity:
             }]
         }
 
-        result = await basic_security.check_security(
+        result = await security_manager.check_security(
             interaction=interaction,
             workflow_name="test_workflow",
             workflow_type="test",
@@ -214,13 +206,13 @@ class TestBasicSecurity:
         assert "permission" in result.message
 
     @pytest.mark.asyncio
-    async def test_check_security_error_handling(self, basic_security):
+    async def test_check_security_error_handling(self, security_manager):
         interaction = Mock(spec=discord.Interaction)
         interaction.user = Mock(spec=discord.Member)
         interaction.user.name = "test_user"
 
         # Simulate an error by passing invalid workflow_config
-        result = await basic_security.check_security(
+        result = await security_manager.check_security(
             interaction=interaction,
             workflow_name="test_workflow",
             workflow_type="test",
@@ -233,7 +225,7 @@ class TestBasicSecurity:
         assert "error occurred" in result.message.lower()
 
     @pytest.mark.asyncio
-    async def test_check_security_success(self, basic_security, mock_interaction):
+    async def test_check_security_success(self, security_manager, mock_interaction):
         workflow_config = {
             "security": {
                 "enabled": True,
@@ -241,7 +233,7 @@ class TestBasicSecurity:
             }
         }
 
-        result = await basic_security.check_security(
+        result = await security_manager.check_security(
             interaction=mock_interaction,
             workflow_name="test_workflow",
             workflow_type="test",
@@ -252,3 +244,10 @@ class TestBasicSecurity:
         assert isinstance(result, SecurityResult)
         assert result.state is True
         assert result.message == ""
+
+    @pytest.mark.asyncio
+    async def test_hook_registration(self):
+        """Test that SecurityManager registers its check_security hook when hook_manager is provided"""
+        mock_hook_manager = Mock()
+        sm = SecurityManager(hook_manager=mock_hook_manager)
+        mock_hook_manager.register_hook.assert_called_once_with('is.security', sm.check_security)
